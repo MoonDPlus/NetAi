@@ -6,6 +6,8 @@ import json
 import numpy as np
 
 from src.features import BagOfWordsVectorizer
+
+from src.dataset_collect import collect_from_sitemaps, collect_from_urls
 from src.metrics import classification_report
 from src.mlp import BinaryCrossEntropy, MLPBinaryClassifier
 from src.text_data import load_labeled_text_csv, train_val_test_split_text
@@ -94,6 +96,19 @@ def _eval_text(args: argparse.Namespace) -> None:
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
 
+
+
+def _collect_text(args: argparse.Namespace) -> None:
+    if args.mode == "urls":
+        with open(args.input, "r", encoding="utf-8") as f:
+            urls = [line.strip() for line in f if line.strip()]
+        count = collect_from_urls(urls, args.out_csv, min_chars=args.min_chars, delay_sec=args.delay_sec)
+    else:
+        with open(args.input, "r", encoding="utf-8") as f:
+            sitemaps = [line.strip() for line in f if line.strip()]
+        count = collect_from_sitemaps(sitemaps, args.out_csv, max_urls=args.max_urls)
+    print(json.dumps({"saved": args.out_csv, "rows": count}, ensure_ascii=False, indent=2))
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Unified CLI for text train/eval")
     sp = p.add_subparsers(dest="cmd", required=True)
@@ -120,6 +135,15 @@ def build_parser() -> argparse.ArgumentParser:
     eval_p.add_argument("--vocab-path", default="vocab.json")
     eval_p.add_argument("--hidden-size", type=int, default=16)
     eval_p.set_defaults(func=_eval_text)
+
+    collect_p = sp.add_parser("collect-text")
+    collect_p.add_argument("--mode", choices=["urls", "sitemaps"], default="urls")
+    collect_p.add_argument("--input", required=True, help="Text file containing one URL per line")
+    collect_p.add_argument("--out-csv", default="data/raw_web_text.csv")
+    collect_p.add_argument("--min-chars", type=int, default=200)
+    collect_p.add_argument("--delay-sec", type=float, default=1.0)
+    collect_p.add_argument("--max-urls", type=int, default=200)
+    collect_p.set_defaults(func=_collect_text)
     return p
 
 

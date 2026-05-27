@@ -11,6 +11,8 @@
 - متریک‌های classification شامل accuracy/precision/recall/F1 + confusion matrix
 - ذخیره history آموزش در JSON
 
+- جمع‌آوری خودکار متن خام از وب (با رعایت robots.txt)
+
 ## نصب و اجرا (فارسی)
 ### 1) ساخت محیط و نصب وابستگی‌ها
 ```bash
@@ -48,6 +50,23 @@ python -m src.train --epochs 1500 --lr 0.01 --batch-size 32 --repeats 300 --nois
 ### 5) اجرای inference برای XOR
 ```bash
 python -m src.infer --model-path model.json --x1 0 --x2 1
+```
+
+### 6) جمع‌آوری خودکار دیتاست خام از اینترنت
+ابتدا یک فایل متنی بساز که در هر خط یک URL داشته باشد (مثلا `urls.txt`) سپس:
+```bash
+python -m src.cli collect-text \
+  --mode urls \
+  --input urls.txt \
+  --out-csv data/raw_web_text.csv
+```
+
+یا اگر لیست sitemap داری (`sitemaps.txt`):
+```bash
+python -m src.cli collect-text \
+  --mode sitemaps \
+  --input sitemaps.txt \
+  --out-csv data/raw_web_text.csv
 ```
 
 ---
@@ -89,6 +108,23 @@ python -m src.train --epochs 1500 --lr 0.01 --batch-size 32 --repeats 300 --nois
 ### 5) Run XOR inference
 ```bash
 python -m src.infer --model-path model.json --x1 0 --x2 1
+```
+
+### 6) Auto-collect raw text dataset from the web
+Create a text file with one URL per line (for example `urls.txt`) and run:
+```bash
+python -m src.cli collect-text \
+  --mode urls \
+  --input urls.txt \
+  --out-csv data/raw_web_text.csv
+```
+
+Or with sitemap list (`sitemaps.txt`):
+```bash
+python -m src.cli collect-text \
+  --mode sitemaps \
+  --input sitemaps.txt \
+  --out-csv data/raw_web_text.csv
 ```
 
 ## Testing
