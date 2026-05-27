@@ -9,7 +9,8 @@ from src.features import BagOfWordsVectorizer
 
 from src.dataset_collect import collect_from_sitemaps, collect_from_urls
 from src.metrics import classification_report
-from src.corpus_tools import save_stats_json, stats_from_csv
+from src.corpus_tools import load_texts_from_csv, save_stats_json, stats_from_csv
+from src.generate import generate_sentences
 from src.mlp import BinaryCrossEntropy, MLPBinaryClassifier
 from src.text_data import load_labeled_text_csv, train_val_test_split_text
 
@@ -118,6 +119,13 @@ def _analyze_corpus(args: argparse.Namespace) -> None:
         save_stats_json(stats, args.out_json)
     print(json.dumps(stats, ensure_ascii=False, indent=2))
 
+
+
+def _generate_text(args: argparse.Namespace) -> None:
+    texts = load_texts_from_csv(args.data_csv)
+    generated = generate_sentences(texts, n_sentences=args.n_sentences, max_words=args.max_words, seed=args.seed)
+    print(json.dumps({"count": len(generated), "sentences": generated}, ensure_ascii=False, indent=2))
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Unified CLI for text train/eval")
     sp = p.add_subparsers(dest="cmd", required=True)
@@ -159,6 +167,13 @@ def build_parser() -> argparse.ArgumentParser:
     analyze_p.add_argument("--data-csv", required=True)
     analyze_p.add_argument("--out-json", default="")
     analyze_p.set_defaults(func=_analyze_corpus)
+
+    gen_p = sp.add_parser("generate-text")
+    gen_p.add_argument("--data-csv", required=True)
+    gen_p.add_argument("--n-sentences", type=int, default=5)
+    gen_p.add_argument("--max-words", type=int, default=12)
+    gen_p.add_argument("--seed", type=int, default=42)
+    gen_p.set_defaults(func=_generate_text)
     return p
 
 
