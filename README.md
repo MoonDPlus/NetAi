@@ -6,8 +6,10 @@
 - پیاده‌سازی MLP از صفر با NumPy (Dense/ReLU/Sigmoid/BCE + backprop)
 - آموزش/ارزیابی روی مسئله XOR
 - مسیر طبقه‌بندی متن فارسی با Bag-of-Words
+- Train/Val/Test split واقعی برای متن
 - CLI یکپارچه برای train/eval متن
-- متریک‌های classification شامل accuracy/precision/recall/F1
+- متریک‌های classification شامل accuracy/precision/recall/F1 + confusion matrix
+- ذخیره history آموزش در JSON
 
 ## نصب و اجرا (فارسی)
 ### 1) ساخت محیط و نصب وابستگی‌ها
@@ -17,13 +19,17 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 2) آموزش مدل متن فارسی
+### 2) آموزش مدل متن فارسی (با split واقعی)
 ```bash
 python -m src.cli train-text \
   --data data/sample_sentiment_fa.csv \
   --model-path text_model.json \
   --vocab-path vocab.json \
-  --optimizer adam
+  --history-path text_history.json \
+  --optimizer adam \
+  --val-ratio 0.2 \
+  --test-ratio 0.2 \
+  --patience 50
 ```
 
 ### 3) ارزیابی مدل متن
@@ -54,13 +60,17 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 2) Train the Persian text classifier
+### 2) Train the Persian text classifier (with real split)
 ```bash
 python -m src.cli train-text \
   --data data/sample_sentiment_fa.csv \
   --model-path text_model.json \
   --vocab-path vocab.json \
-  --optimizer adam
+  --history-path text_history.json \
+  --optimizer adam \
+  --val-ratio 0.2 \
+  --test-ratio 0.2 \
+  --patience 50
 ```
 
 ### 3) Evaluate the text classifier

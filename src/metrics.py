@@ -13,7 +13,7 @@ def confusion_counts(y_pred: np.ndarray, y_true: np.ndarray) -> tuple[int, int, 
     return tp, tn, fp, fn
 
 
-def classification_report(y_pred: np.ndarray, y_true: np.ndarray) -> dict[str, float]:
+def classification_report(y_pred: np.ndarray, y_true: np.ndarray) -> dict[str, float | dict[str, int]]:
     tp, tn, fp, fn = confusion_counts(y_pred, y_true)
     total = max(1, tp + tn + fp + fn)
     acc = (tp + tn) / total
@@ -25,4 +25,5 @@ def classification_report(y_pred: np.ndarray, y_true: np.ndarray) -> dict[str, f
         "precision": float(precision),
         "recall": float(recall),
         "f1": float(f1),
+        "confusion": {"tp": tp, "tn": tn, "fp": fp, "fn": fn},
     }
