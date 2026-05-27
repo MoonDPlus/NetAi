@@ -113,10 +113,10 @@ class BinaryCrossEntropy:
 
 
 class MLPBinaryClassifier:
-    def __init__(self, seed: int = 42) -> None:
-        self.fc1 = Dense(2, 8, seed=seed)
+    def __init__(self, seed: int = 42, in_features: int = 2, hidden_size: int = 8) -> None:
+        self.fc1 = Dense(in_features, hidden_size, seed=seed)
         self.relu = ReLU()
-        self.fc2 = Dense(8, 1, seed=seed + 1)
+        self.fc2 = Dense(hidden_size, 1, seed=seed + 1)
         self.sigmoid = Sigmoid()
 
     def forward(self, x: np.ndarray) -> np.ndarray:

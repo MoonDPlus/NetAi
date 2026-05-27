@@ -1,63 +1,37 @@
 # NetAi
 
-شروع یک پروژه هوش مصنوعی مستقل با پایتون (بدون وابستگی به APIهای آماده).
+پروژه هوش مصنوعی مستقل با پایتون (بدون API آماده).
 
-## مرحله فعلی (گام سوم)
-در این مرحله نسخه قبلی را کاربردی‌تر کردیم:
+## مرحله فعلی (گام چهارم)
+علاوه بر مسیر XOR، حالا یک مسیر واقعی‌تر برای طبقه‌بندی متن هم داریم:
 
-- لایه Dense
-- فعال‌ساز ReLU
-- فعال‌ساز Sigmoid
-- Binary Cross Entropy Loss
-- گرادیان و Backpropagation
-- آموزش **Mini-batch**
-- Split آموزش/اعتبارسنجی
-- ذخیره/لود وزن‌ها
-- **Optimizer قابل انتخاب (SGD/Adam)**
-- **Early Stopping**
-- **اسکریپت inference**
-- تست‌های پایه + تست Train
+- MLP از صفر با NumPy
+- train/infer روی XOR
+- CLI یکپارچه برای train/eval متن
+- Bag-of-Words ساده برای متن فارسی
+- متریک‌های accuracy/precision/recall/F1
 
-## ساختار پروژه
+## داده نمونه
+`data/sample_sentiment_fa.csv` شامل نمونه‌های کوچک sentiment فارسی است.
 
-```text
-.
-├── README.md
-├── requirements.txt
-├── src
-│   ├── __init__.py
-│   ├── data.py
-│   ├── infer.py
-│   ├── mlp.py
-│   └── train.py
-└── tests
-    ├── test_data.py
-    ├── test_model.py
-    └── test_train.py
-```
-
-## نصب و اجرا
-
+## آموزش مدل متن
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python -m src.train --epochs 1500 --lr 0.01 --batch-size 32 --repeats 300 --noise 0.05 --optimizer adam --patience 200 --save-path model.json
+python -m src.cli train-text \
+  --data data/sample_sentiment_fa.csv \
+  --model-path text_model.json \
+  --vocab-path vocab.json \
+  --optimizer adam
 ```
 
-## اجرای inference
-
+## ارزیابی مدل متن
 ```bash
-python -m src.infer --model-path model.json --x1 0 --x2 1
+python -m src.cli eval-text \
+  --data data/sample_sentiment_fa.csv \
+  --model-path text_model.json \
+  --vocab-path vocab.json
 ```
 
-## اجرای تست‌ها
-
-```bash
-python -m unittest discover -s tests
-```
-
-## هدف گام بعدی
-- اضافه کردن چند وظیفه واقعی‌تر از XOR (مثلاً طبقه‌بندی ساده متن)
-- ساخت یک CLI یکپارچه برای train/eval/infer
-- گزارش‌گیری بهتر (ذخیره history و نمودار)
+## مرحله بعدی
+- جایگزینی BoW با embedding بهتر
+- اضافه‌کردن mini-batch و early stopping به train-text
+- افزایش داده واقعی
