@@ -75,6 +75,7 @@ def collect_from_urls(
     min_chars: int = 200,
     delay_sec: float = 1.0,
     timeout: float = 10.0,
+    verbose: bool = False,
 ) -> int:
     out_path = Path(out_csv)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -89,17 +90,26 @@ def collect_from_urls(
         seen.add(url)
 
         if not _allowed(url, user_agent=user_agent):
+            if verbose:
+                print(f"[skip robots] {url}")
             continue
 
         try:
             html = _fetch(url, user_agent=user_agent, timeout=timeout)
-        except Exception:
+        except Exception as exc:
+            if verbose:
+                print(f"[skip fetch] {url} -> {exc}")
             continue
 
         text = extract_clean_text(html)
         if len(text) < min_chars:
+            if verbose:
+                print(f"[skip short] {url} len={len(text)}")
             continue
+
         rows.append(CrawlItem(url=url, text=text))
+        if verbose:
+            print(f"[ok] {url} len={len(text)}")
         time.sleep(delay_sec)
 
     with out_path.open("w", encoding="utf-8", newline="") as f:
@@ -117,6 +127,7 @@ def collect_from_sitemaps(
     *,
     max_urls: int = 200,
     user_agent: str = DEFAULT_UA,
+    verbose: bool = False,
 ) -> int:
     urls: list[str] = []
     loc_re = re.compile(r"<loc>(.*?)</loc>", re.IGNORECASE)
@@ -124,8 +135,11 @@ def collect_from_sitemaps(
     for sitemap_url in sitemap_urls:
         try:
             xml = _fetch(sitemap_url, user_agent=user_agent, timeout=15.0)
-        except Exception:
+        except Exception as exc:
+            if verbose:
+                print(f"[skip sitemap] {sitemap_url} -> {exc}")
             continue
+
         for match in loc_re.findall(xml):
             u = match.strip()
             if u:
@@ -135,4 +149,4 @@ def collect_from_sitemaps(
         if len(urls) >= max_urls:
             break
 
-    return collect_from_urls(urls, out_csv, user_agent=user_agent)
+    return collect_from_urls(urls, out_csv, user_agent=user_agent, verbose=verbose)

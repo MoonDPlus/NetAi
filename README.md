@@ -127,6 +127,17 @@ python -m src.cli collect-text \
   --out-csv data/raw_web_text.csv
 ```
 
+
+### 7) یادگیری خودکار از اینترنت + گزارش ظرفیت واژگان/جمله
+1. از لیست URL اولیه (`data/seed_urls.txt`) متن جمع کن:
+```bash
+python -m src.cli collect-text --mode urls --input data/seed_urls.txt --out-csv data/raw_web_text.csv --min-chars 100 --verbose
+```
+2. آمار یادگیری را بگیر (کل کلمات، کلمات یکتا، تعداد جمله‌ها، ظرفیت تقریبی تولید):
+```bash
+python -m src.cli analyze-corpus --data-csv data/raw_web_text.csv --out-json data/corpus_stats.json
+```
+
 ## Testing
 ```bash
 python -m unittest discover -s tests
