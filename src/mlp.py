@@ -16,6 +16,11 @@ class Dense:
         self.dw: np.ndarray | None = None
         self.db: np.ndarray | None = None
 
+        self.m_w = np.zeros_like(self.w)
+        self.v_w = np.zeros_like(self.w)
+        self.m_b = np.zeros_like(self.b)
+        self.v_b = np.zeros_like(self.b)
+
     def forward(self, x: np.ndarray) -> np.ndarray:
         self.x = x
         return x @ self.w + self.b
@@ -33,6 +38,30 @@ class Dense:
             raise RuntimeError("Backward must be called before step.")
         self.w -= lr * self.dw
         self.b -= lr * self.db
+
+    def step_adam(
+        self,
+        lr: float,
+        t: int,
+        beta1: float = 0.9,
+        beta2: float = 0.999,
+        eps: float = 1e-8,
+    ) -> None:
+        if self.dw is None or self.db is None:
+            raise RuntimeError("Backward must be called before step.")
+
+        self.m_w = beta1 * self.m_w + (1.0 - beta1) * self.dw
+        self.v_w = beta2 * self.v_w + (1.0 - beta2) * (self.dw**2)
+        self.m_b = beta1 * self.m_b + (1.0 - beta1) * self.db
+        self.v_b = beta2 * self.v_b + (1.0 - beta2) * (self.db**2)
+
+        m_w_hat = self.m_w / (1.0 - beta1**t)
+        v_w_hat = self.v_w / (1.0 - beta2**t)
+        m_b_hat = self.m_b / (1.0 - beta1**t)
+        v_b_hat = self.v_b / (1.0 - beta2**t)
+
+        self.w -= lr * m_w_hat / (np.sqrt(v_w_hat) + eps)
+        self.b -= lr * m_b_hat / (np.sqrt(v_b_hat) + eps)
 
 
 class ReLU:
@@ -84,10 +113,10 @@ class BinaryCrossEntropy:
 
 
 class MLPBinaryClassifier:
-    def __init__(self, seed: int = 42) -> None:
-        self.fc1 = Dense(2, 8, seed=seed)
+    def __init__(self, seed: int = 42, in_features: int = 2, hidden_size: int = 8) -> None:
+        self.fc1 = Dense(in_features, hidden_size, seed=seed)
         self.relu = ReLU()
-        self.fc2 = Dense(8, 1, seed=seed + 1)
+        self.fc2 = Dense(hidden_size, 1, seed=seed + 1)
         self.sigmoid = Sigmoid()
 
     def forward(self, x: np.ndarray) -> np.ndarray:
@@ -105,6 +134,10 @@ class MLPBinaryClassifier:
     def step(self, lr: float) -> None:
         self.fc1.step(lr)
         self.fc2.step(lr)
+
+    def step_adam(self, lr: float, t: int) -> None:
+        self.fc1.step_adam(lr=lr, t=t)
+        self.fc2.step_adam(lr=lr, t=t)
 
     def save(self, path: str | Path) -> None:
         payload = {
