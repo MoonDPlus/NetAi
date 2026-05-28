@@ -19,7 +19,24 @@ class MemoryChatbot:
 
     def _load(self) -> None:
         if self.memory_path.exists():
-            self.pairs = json.loads(self.memory_path.read_text(encoding="utf-8"))
+            raw = json.loads(self.memory_path.read_text(encoding="utf-8"))
+            # Backward/forward compatibility:
+            # - old format: [ {"user": "...", "assistant": "..."} ]
+            # - new format: { "pairs": [ ... ] }
+            if isinstance(raw, dict):
+                raw = raw.get("pairs", [])
+            if not isinstance(raw, list):
+                raw = []
+
+            cleaned: list[dict[str, str]] = []
+            for item in raw:
+                if not isinstance(item, dict):
+                    continue
+                user = item.get("user")
+                assistant = item.get("assistant")
+                if isinstance(user, str) and isinstance(assistant, str):
+                    cleaned.append({"user": user, "assistant": assistant})
+            self.pairs = cleaned
 
     def _save(self) -> None:
         self.memory_path.parent.mkdir(parents=True, exist_ok=True)
