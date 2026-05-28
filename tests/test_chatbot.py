@@ -40,6 +40,14 @@ class TestMemoryChatbot(unittest.TestCase):
         res = answer_from_corpus("یادگیری عمیق", texts, top_k=1)
         self.assertIn("یادگیری عمیق", res["reply"])
 
+    def test_english_greeting_reply(self):
+        with tempfile.TemporaryDirectory() as d:
+            bot = MemoryChatbot(memory_path=Path(d) / "mem.json")
+            res = bot.respond("hello")
+            self.assertEqual(res["mode"], "greeting")
+            self.assertEqual(res["language"], "en")
+            self.assertIn("Hi", res["reply"])
+
     def test_greeting_does_not_match_unrelated_memory_song(self):
         with tempfile.TemporaryDirectory() as d:
             path = Path(d) / "mem.json"

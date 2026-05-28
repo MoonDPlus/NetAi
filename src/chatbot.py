@@ -7,6 +7,7 @@ from pathlib import Path
 TOKEN_RE = re.compile(r"\w+", re.UNICODE)
 SENT_SPLIT_RE = re.compile(r"(?<=[.!؟?])\s+|[\n\r]+")
 GREETING_TOKENS = {"سلام", "درود", "hello", "hi"}
+PERSIAN_RE = re.compile(r"[\u0600-\u06ff]")
 SHORT_QUERY_MAX_TOKENS = 2
 
 
@@ -18,12 +19,47 @@ def _is_greeting(tokens: set[str]) -> bool:
     return bool(tokens & GREETING_TOKENS) and len(tokens) <= SHORT_QUERY_MAX_TOKENS
 
 
-def greeting_reply() -> dict[str, object]:
+def detect_language(text: str) -> str:
+    return "fa" if PERSIAN_RE.search(text) else "en"
+
+
+def _message(key: str, lang: str) -> str:
+    messages = {
+        "greeting": {
+            "fa": "سلام! من آماده‌ام. درباره چه موضوعی می‌خوای صحبت کنیم یا از کورپوس یادگرفته‌شده چی بپرسی؟",
+            "en": "Hi! I am ready. What topic do you want to discuss or ask from the learned corpus?",
+        },
+        "empty": {
+            "fa": "هنوز نمونه مشابهی در حافظه یا کورپوس ندارم. با crawl-learn داده جمع کن یا با --corpus-csv کورپوس جمع‌شده را به chat بده.",
+            "en": "I do not have a similar memory or corpus answer yet. Collect data with crawl-learn or pass the learned corpus with --corpus-csv.",
+        },
+        "no_corpus": {
+            "fa": "در کورپوس فعلی جمله مرتبطی پیدا نکردم. اول با crawl-learn داده بیشتری جمع کن.",
+            "en": "I could not find a relevant sentence in the current corpus. Collect more relevant data with crawl-learn first.",
+        },
+        "low_corpus": {
+            "fa": "پاسخ مرتبط و قابل اعتماد در کورپوس پیدا نکردم. سوال را دقیق‌تر بپرس یا داده مرتبط بیشتری جمع کن.",
+            "en": "I could not find a reliable relevant answer in the corpus. Ask more specifically or collect more relevant data.",
+        },
+        "low_memory": {
+            "fa": "یک نمونه خیلی کم‌ارتباط پیدا کردم، اما برای جلوگیری از جواب پرت آن را استفاده نکردم. سوال را دقیق‌تر بپرس یا داده مرتبط بیشتری بده.",
+            "en": "I found only a weakly related memory item, so I did not use it as an answer. Ask more specifically or add more relevant data.",
+        },
+        "invalid": {
+            "fa": "پیام قابل تحلیل نبود.",
+            "en": "The message could not be analyzed.",
+        },
+    }
+    return messages[key][lang if lang in {"fa", "en"} else "en"]
+
+
+def greeting_reply(lang: str = "fa") -> dict[str, object]:
     return {
-        "reply": "سلام! من آماده‌ام. درباره چه موضوعی می‌خوای صحبت کنیم یا از کورپوس یادگرفته‌شده چی بپرسی؟",
+        "reply": _message("greeting", lang),
         "similarity": 1.0,
         "source": "built-in greeting",
         "mode": "greeting",
+        "language": lang,
     }
 
 
@@ -43,11 +79,12 @@ def answer_from_corpus(
     top_k: int = 3,
     min_similarity: float = 0.12,
 ) -> dict[str, object]:
+    lang = detect_language(user_text)
     query_tokens = _tokenize(user_text)
     if _is_greeting(query_tokens):
-        return greeting_reply()
+        return greeting_reply(lang)
     if not query_tokens:
-        return {"reply": "پیام قابل تحلیل نبود.", "similarity": 0.0, "source": None, "mode": "corpus"}
+        return {"reply": _message("invalid", lang), "similarity": 0.0, "source": None, "mode": "corpus", "language": lang}
 
     scored: list[tuple[float, str]] = []
     for text in texts:
@@ -63,19 +100,21 @@ def answer_from_corpus(
 
     if not scored:
         return {
-            "reply": "در کورپوس فعلی جمله مرتبطی پیدا نکردم. اول با crawl-learn داده بیشتری جمع کن.",
+            "reply": _message("no_corpus", lang),
             "similarity": 0.0,
             "source": None,
             "mode": "corpus",
+            "language": lang,
         }
 
     scored.sort(key=lambda x: x[0], reverse=True)
     if scored[0][0] < min_similarity:
         return {
-            "reply": "پاسخ مرتبط و قابل اعتماد در کورپوس پیدا نکردم. سوال را دقیق‌تر بپرس یا داده مرتبط بیشتری جمع کن.",
+            "reply": _message("low_corpus", lang),
             "similarity": round(scored[0][0], 4),
             "source": scored[0][1],
             "mode": "low_confidence",
+            "language": lang,
         }
     selected: list[str] = []
     seen: set[str] = set()
@@ -88,7 +127,7 @@ def answer_from_corpus(
             break
 
     reply = " ".join(selected)
-    return {"reply": reply, "similarity": round(scored[0][0], 4), "source": selected[0], "mode": "corpus"}
+    return {"reply": reply, "similarity": round(scored[0][0], 4), "source": selected[0], "mode": "corpus", "language": lang}
 
 
 class MemoryChatbot:
@@ -134,9 +173,10 @@ class MemoryChatbot:
         top_k: int = 3,
         min_similarity: float = 0.15,
     ) -> dict[str, object]:
+        lang = detect_language(user_text)
         query_tokens = _tokenize(user_text)
         if _is_greeting(query_tokens):
-            return greeting_reply()
+            return greeting_reply(lang)
         best = None
         best_score = -1.0
         for item in self.pairs:
@@ -156,6 +196,7 @@ class MemoryChatbot:
                 "similarity": round(best_score, 4),
                 "source": best["user"],
                 "mode": "memory",
+                "language": lang,
             }
 
         if corpus_texts:
@@ -163,14 +204,11 @@ class MemoryChatbot:
 
         if best is not None and best_score > 0:
             return {
-                "reply": "یک نمونه خیلی کم‌ارتباط پیدا کردم، اما برای جلوگیری از جواب پرت آن را استفاده نکردم. سوال را دقیق‌تر بپرس یا داده مرتبط بیشتری بده.",
+                "reply": _message("low_memory", lang),
                 "similarity": round(best_score, 4),
                 "source": best["user"],
                 "mode": "low_confidence",
+                "language": lang,
             }
 
-        reply = (
-            "هنوز نمونه مشابهی در حافظه یا کورپوس ندارم. "
-            "با crawl-learn داده جمع کن یا با --corpus-csv کورپوس جمع‌شده را به chat بده."
-        )
-        return {"reply": reply, "similarity": 0.0, "source": None, "mode": "empty"}
+        return {"reply": _message("empty", lang), "similarity": 0.0, "source": None, "mode": "empty", "language": lang}

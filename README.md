@@ -69,6 +69,8 @@ python -m src.cli crawl-learn \
   --ask-every 100 \
   --workers 16 \
   --delay-sec 0 \
+  --db-path data/netai.db \
+  --save-every 500 \
   --verbose \
   --ignore-robots
 ```
@@ -116,6 +118,28 @@ python -m src.cli chat --message "یادگیری ماشین چیست؟" --corpus
 python -m src.cli learn-chat   --user-message "چطور مدل رو بهتر کنم؟"   --assistant-message "داده بیشتر، ارزیابی درست، و تنظیم هایپرپارامترها را انجام بده."
 ```
 
+
+### 6.1) اجرای API روی سرور
+```bash
+python -m src.cli serve-api \
+  --host 0.0.0.0 \
+  --port 8000 \
+  --corpus-csv data/raw_web_text.csv \
+  --db-path data/netai.db
+```
+
+نمونه پرسیدن سوال از API:
+```bash
+curl -X POST http://127.0.0.1:8000/chat \
+  -H 'Content-Type: application/json' \
+  -d '{"message":"یادگیری ماشین چیست؟","top_k":3,"min_similarity":0.15}'
+```
+
+وضعیت پیشرفت جمع‌آوری داده:
+```bash
+curl http://127.0.0.1:8000/stats
+```
+
 ### 5) مسیر XOR
 ```bash
 python -m src.train --epochs 1500 --lr 0.01 --batch-size 32 --repeats 300 --noise 0.05 --optimizer adam --patience 200 --save-path model.json
@@ -150,7 +174,7 @@ python -m src.cli collect-text --mode urls --input data/seed_urls.txt --out-csv 
 
 ### 1.1) Faster continuous crawling with link discovery
 ```bash
-python -m src.cli crawl-learn --input data/seed_urls.txt --out-csv data/raw_web_text.csv --min-chars 100 --ask-every 100 --workers 16 --delay-sec 0 --verbose --ignore-robots
+python -m src.cli crawl-learn --input data/seed_urls.txt --out-csv data/raw_web_text.csv --min-chars 100 --ask-every 100 --workers 16 --delay-sec 0 --db-path data/netai.db --save-every 500 --verbose --ignore-robots
 ```
 
 ### 2) Analyze learned corpus
@@ -184,6 +208,24 @@ python -m src.cli chat --message "What is machine learning?" --corpus-csv data/r
 - Teach a new pair into memory:
 ```bash
 python -m src.cli learn-chat   --user-message "How can I improve the model?"   --assistant-message "Use more data, evaluate correctly, and tune hyperparameters."
+```
+
+
+### 6.1) Run the API on a server
+```bash
+python -m src.cli serve-api --host 0.0.0.0 --port 8000 --corpus-csv data/raw_web_text.csv --db-path data/netai.db
+```
+
+Ask a question through the API:
+```bash
+curl -X POST http://127.0.0.1:8000/chat \
+  -H 'Content-Type: application/json' \
+  -d '{"message":"What is machine learning?","top_k":3,"min_similarity":0.15}'
+```
+
+Check data-collection progress:
+```bash
+curl http://127.0.0.1:8000/stats
 ```
 
 ### 5) XOR path

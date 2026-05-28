@@ -195,8 +195,15 @@ def crawl_discovery_loop(
     ignore_robots: bool = False,
     ask_every: int = 100,
     workers: int = 8,
-) -> dict[str, int | bool]:
+    db_path: str | Path | None = None,
+    save_every: int = 500,
+) -> dict[str, int | bool | str | None]:
     from concurrent.futures import ThreadPoolExecutor
+
+    if db_path is not None:
+        from src.storage import save_crawl_snapshot
+    else:
+        save_crawl_snapshot = None
 
     out_path = Path(out_csv)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -246,6 +253,24 @@ def crawl_discovery_loop(
                         queue.append(new_url)
                         queued.add(new_url)
 
+                should_db_checkpoint = (
+                    save_crawl_snapshot is not None
+                    and save_every > 0
+                    and scanned % save_every == 0
+                    and (queue or in_flight)
+                )
+                if should_db_checkpoint:
+                    save_crawl_snapshot(
+                        db_path,
+                        rows,
+                        scanned=scanned,
+                        queued=len(queue),
+                        in_flight=len(in_flight),
+                        stopped_by_user=False,
+                    )
+                    if verbose:
+                        print(f"[db checkpoint] scanned={scanned} saved={len(rows)} queued={len(queue)}")
+
                 if ask_every > 0 and scanned % ask_every == 0:
                     _write_crawl_rows(out_path, rows)
                     prompt = f"Scanned {scanned} links (saved={len(rows)}, queued={len(queue)}). Continue? [y/N]: "
@@ -255,6 +280,15 @@ def crawl_discovery_loop(
                         queue.clear()
                         for pending in in_flight:
                             pending.cancel()
+                        if save_crawl_snapshot is not None:
+                            save_crawl_snapshot(
+                                db_path,
+                                rows,
+                                scanned=scanned,
+                                queued=len(queue),
+                                in_flight=len(in_flight),
+                                stopped_by_user=True,
+                            )
                         in_flight.clear()
                         break
 
@@ -263,7 +297,22 @@ def crawl_discovery_loop(
             submit_next(executor, in_flight)
 
     _write_crawl_rows(out_path, rows)
-    return {"scanned": scanned, "saved": len(rows), "queued": len(queue), "stopped_by_user": stopped_by_user}
+    if save_crawl_snapshot is not None:
+        save_crawl_snapshot(
+            db_path,
+            rows,
+            scanned=scanned,
+            queued=len(queue),
+            in_flight=0,
+            stopped_by_user=stopped_by_user,
+        )
+    return {
+        "scanned": scanned,
+        "saved": len(rows),
+        "queued": len(queue),
+        "stopped_by_user": stopped_by_user,
+        "db_path": str(db_path) if db_path else None,
+    }
 
 
 def collect_from_urls(

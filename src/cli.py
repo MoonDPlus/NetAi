@@ -15,6 +15,7 @@ from src.mlp import BinaryCrossEntropy, MLPBinaryClassifier
 from src.text_data import load_labeled_text_csv, train_val_test_split_text
 from src.chatbot import MemoryChatbot
 from src.instruct_import import import_instruct_repo
+from src.api import run_api_server
 
 
 def _to_xy(texts: list[str], labels: list[int], vec: BagOfWordsVectorizer) -> tuple[np.ndarray, np.ndarray]:
@@ -180,8 +181,22 @@ def _crawl_learn(args: argparse.Namespace) -> None:
         ignore_robots=args.ignore_robots,
         ask_every=args.ask_every,
         workers=args.workers,
+        db_path=args.db_path,
+        save_every=args.save_every,
     )
     print(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+def _serve_api(args: argparse.Namespace) -> None:
+    run_api_server(
+        host=args.host,
+        port=args.port,
+        memory_path=args.memory_path,
+        corpus_csv=args.corpus_csv,
+        db_path=args.db_path,
+        top_k=args.top_k,
+        min_similarity=args.min_similarity,
+    )
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Unified CLI for text train/eval")
@@ -261,8 +276,20 @@ def build_parser() -> argparse.ArgumentParser:
     crawl_p.add_argument("--ignore-robots", action="store_true")
     crawl_p.add_argument("--ask-every", type=int, default=100)
     crawl_p.add_argument("--workers", type=int, default=8, help="Concurrent requests for faster crawling")
+    crawl_p.add_argument("--db-path", default="data/netai.db", help="SQLite DB for crawl checkpoints/pages")
+    crawl_p.add_argument("--save-every", type=int, default=500, help="Save crawl snapshot to DB every N scanned URLs while still running")
     crawl_p.add_argument("--verbose", action="store_true")
     crawl_p.set_defaults(func=_crawl_learn)
+
+    api_p = sp.add_parser("serve-api")
+    api_p.add_argument("--host", default="127.0.0.1")
+    api_p.add_argument("--port", type=int, default=8000)
+    api_p.add_argument("--memory-path", default="data/chat_memory.json")
+    api_p.add_argument("--corpus-csv", default="data/raw_web_text.csv")
+    api_p.add_argument("--db-path", default="data/netai.db")
+    api_p.add_argument("--top-k", type=int, default=3)
+    api_p.add_argument("--min-similarity", type=float, default=0.15)
+    api_p.set_defaults(func=_serve_api)
     return p
 
 

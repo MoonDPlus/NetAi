@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from src.dataset_collect import crawl_discovery_loop, encode_url, extract_clean_text, extract_links
+from src.storage import crawl_db_stats
 
 
 class TestDatasetCollect(unittest.TestCase):
@@ -41,6 +42,7 @@ class TestDatasetCollect(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as d:
             out = Path(d) / "crawl.csv"
+            db = Path(d) / "crawl.db"
             with patch("src.dataset_collect._fetch", side_effect=fake_fetch):
                 stats = crawl_discovery_loop(
                     ["https://example.com/start"],
@@ -49,11 +51,16 @@ class TestDatasetCollect(unittest.TestCase):
                     workers=2,
                     ask_every=0,
                     ignore_robots=True,
+                    db_path=db,
+                    save_every=1,
                 )
             self.assertEqual(stats["scanned"], 2)
             with out.open("r", encoding="utf-8", newline="") as f:
                 rows = list(csv.DictReader(f))
             self.assertEqual(len(rows), 2)
+            db_stats = crawl_db_stats(db)
+            self.assertEqual(db_stats["pages"], 2)
+            self.assertEqual(db_stats["last_scanned"], 2)
 
 
 if __name__ == "__main__":
