@@ -6,10 +6,25 @@ from pathlib import Path
 
 TOKEN_RE = re.compile(r"\w+", re.UNICODE)
 SENT_SPLIT_RE = re.compile(r"(?<=[.!؟?])\s+|[\n\r]+")
+GREETING_TOKENS = {"سلام", "درود", "hello", "hi"}
+SHORT_QUERY_MAX_TOKENS = 2
 
 
 def _tokenize(text: str) -> set[str]:
     return {t.lower() for t in TOKEN_RE.findall(text)}
+
+
+def _is_greeting(tokens: set[str]) -> bool:
+    return bool(tokens & GREETING_TOKENS) and len(tokens) <= SHORT_QUERY_MAX_TOKENS
+
+
+def greeting_reply() -> dict[str, object]:
+    return {
+        "reply": "سلام! من آماده‌ام. درباره چه موضوعی می‌خوای صحبت کنیم یا از کورپوس یادگرفته‌شده چی بپرسی؟",
+        "similarity": 1.0,
+        "source": "built-in greeting",
+        "mode": "greeting",
+    }
 
 
 def split_sentences(text: str) -> list[str]:
@@ -21,8 +36,16 @@ def split_sentences(text: str) -> list[str]:
     return sentences
 
 
-def answer_from_corpus(user_text: str, texts: list[str], *, top_k: int = 3) -> dict[str, object]:
+def answer_from_corpus(
+    user_text: str,
+    texts: list[str],
+    *,
+    top_k: int = 3,
+    min_similarity: float = 0.12,
+) -> dict[str, object]:
     query_tokens = _tokenize(user_text)
+    if _is_greeting(query_tokens):
+        return greeting_reply()
     if not query_tokens:
         return {"reply": "پیام قابل تحلیل نبود.", "similarity": 0.0, "source": None, "mode": "corpus"}
 
@@ -47,6 +70,13 @@ def answer_from_corpus(user_text: str, texts: list[str], *, top_k: int = 3) -> d
         }
 
     scored.sort(key=lambda x: x[0], reverse=True)
+    if scored[0][0] < min_similarity:
+        return {
+            "reply": "پاسخ مرتبط و قابل اعتماد در کورپوس پیدا نکردم. سوال را دقیق‌تر بپرس یا داده مرتبط بیشتری جمع کن.",
+            "similarity": round(scored[0][0], 4),
+            "source": scored[0][1],
+            "mode": "low_confidence",
+        }
     selected: list[str] = []
     seen: set[str] = set()
     for score, sentence in scored:
@@ -96,8 +126,17 @@ class MemoryChatbot:
         self.pairs.append({"user": user_text.strip(), "assistant": assistant_text.strip()})
         self._save()
 
-    def respond(self, user_text: str, corpus_texts: list[str] | None = None, *, top_k: int = 3) -> dict[str, object]:
+    def respond(
+        self,
+        user_text: str,
+        corpus_texts: list[str] | None = None,
+        *,
+        top_k: int = 3,
+        min_similarity: float = 0.15,
+    ) -> dict[str, object]:
         query_tokens = _tokenize(user_text)
+        if _is_greeting(query_tokens):
+            return greeting_reply()
         best = None
         best_score = -1.0
         for item in self.pairs:
@@ -111,7 +150,7 @@ class MemoryChatbot:
                 best_score = score
                 best = item
 
-        if best is not None and best_score > 0:
+        if best is not None and best_score >= min_similarity:
             return {
                 "reply": best["assistant"],
                 "similarity": round(best_score, 4),
@@ -120,7 +159,15 @@ class MemoryChatbot:
             }
 
         if corpus_texts:
-            return answer_from_corpus(user_text, corpus_texts, top_k=top_k)
+            return answer_from_corpus(user_text, corpus_texts, top_k=top_k, min_similarity=min_similarity)
+
+        if best is not None and best_score > 0:
+            return {
+                "reply": "یک نمونه خیلی کم‌ارتباط پیدا کردم، اما برای جلوگیری از جواب پرت آن را استفاده نکردم. سوال را دقیق‌تر بپرس یا داده مرتبط بیشتری بده.",
+                "similarity": round(best_score, 4),
+                "source": best["user"],
+                "mode": "low_confidence",
+            }
 
         reply = (
             "هنوز نمونه مشابهی در حافظه یا کورپوس ندارم. "

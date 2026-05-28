@@ -146,7 +146,12 @@ def _generate_text(args: argparse.Namespace) -> None:
 def _chat_reply(args: argparse.Namespace) -> None:
     bot = MemoryChatbot(memory_path=args.memory_path)
     corpus_texts = load_texts_from_csv(args.corpus_csv) if args.corpus_csv else None
-    result = bot.respond(args.message, corpus_texts=corpus_texts, top_k=args.top_k)
+    result = bot.respond(
+        args.message,
+        corpus_texts=corpus_texts,
+        top_k=args.top_k,
+        min_similarity=args.min_similarity,
+    )
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
@@ -233,6 +238,7 @@ def build_parser() -> argparse.ArgumentParser:
     chat_p.add_argument("--memory-path", default="data/chat_memory.json")
     chat_p.add_argument("--corpus-csv", default="", help="Optional crawled corpus CSV for automatic answers")
     chat_p.add_argument("--top-k", type=int, default=3, help="Number of corpus sentences to stitch into an answer")
+    chat_p.add_argument("--min-similarity", type=float, default=0.15, help="Minimum similarity required before using memory/corpus answers")
     chat_p.set_defaults(func=_chat_reply)
 
     learn_p = sp.add_parser("learn-chat")

@@ -107,8 +107,10 @@ python -m src.cli chat --message "سلام، در مورد یادگیری ماش
 ```
 - پاسخ خودکار از کورپوس جمع‌آوری‌شده (بدون learn-chat دستی):
 ```bash
-python -m src.cli chat --message "یادگیری ماشین چیست؟" --corpus-csv data/raw_web_text.csv --top-k 3
+python -m src.cli chat --message "یادگیری ماشین چیست؟" --corpus-csv data/raw_web_text.csv --top-k 3 --min-similarity 0.15
 ```
+
+> نکته: برای پیام‌های خیلی کوتاه مثل «سلام»، بات دیگر حافظه/کورپوس نامرتبط را انتخاب نمی‌کند و پاسخ greeting داخلی می‌دهد. برای جلوگیری از جواب‌های پرت، پاسخ‌های memory/corpus باید از آستانه `--min-similarity` عبور کنند.
 - یاد دادن یک پاسخ جدید به بات (حافظه‌محور):
 ```bash
 python -m src.cli learn-chat   --user-message "چطور مدل رو بهتر کنم؟"   --assistant-message "داده بیشتر، ارزیابی درست، و تنظیم هایپرپارامترها را انجام بده."
@@ -175,8 +177,10 @@ python -m src.cli chat --message "Explain machine learning basics"
 ```
 - Auto-answer from the crawled corpus (no manual learn-chat required):
 ```bash
-python -m src.cli chat --message "What is machine learning?" --corpus-csv data/raw_web_text.csv --top-k 3
+python -m src.cli chat --message "What is machine learning?" --corpus-csv data/raw_web_text.csv --top-k 3 --min-similarity 0.15
 ```
+
+> Note: For very short greetings such as `hi`, the bot now returns a built-in greeting instead of matching unrelated memory/corpus rows. Memory/corpus answers must pass `--min-similarity` to avoid irrelevant replies.
 - Teach a new pair into memory:
 ```bash
 python -m src.cli learn-chat   --user-message "How can I improve the model?"   --assistant-message "Use more data, evaluate correctly, and tune hyperparameters."
