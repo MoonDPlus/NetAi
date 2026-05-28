@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import json
 import re
+import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -10,7 +11,19 @@ TOKEN_RE = re.compile(r"\w+", re.UNICODE)
 SENT_SPLIT_RE = re.compile(r"[.!؟!?\n]+")
 
 
+def ensure_large_csv_fields() -> None:
+    """Allow reading crawled pages whose text field is larger than csv's small default."""
+    limit = sys.maxsize
+    while True:
+        try:
+            csv.field_size_limit(limit)
+            return
+        except OverflowError:
+            limit //= 10
+
+
 def load_texts_from_csv(path: str | Path, text_column: str = "text") -> list[str]:
+    ensure_large_csv_fields()
     texts: list[str] = []
     with Path(path).open("r", encoding="utf-8", newline="") as f:
         reader = csv.DictReader(f)
