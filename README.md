@@ -33,9 +33,30 @@ python -m src.cli collect-text \
   --input data/seed_urls.txt \
   --out-csv data/raw_web_text.csv \
   --min-chars 100 \
-  --verbose
+  --verbose \
+  --ignore-robots
 ```
 
+
+### 1.1) اگر همه URLها با `[skip robots]` رد شدند
+برای تست و جمع‌آوری اولیه می‌توانی robots را موقتاً نادیده بگیری:
+```bash
+python -m src.cli collect-text --mode urls --input data/seed_urls.txt --out-csv data/raw_web_text.csv --min-chars 100 --verbose --ignore-robots
+```
+
+### 1.2) یادگیری از Persian_instruct_dataset
+1) ریپو را clone کن:
+```bash
+git clone https://github.com/mostafaamiri/Persian_instruct_dataset data/Persian_instruct_dataset
+```
+2) داده instruct را به حافظه چت تبدیل کن:
+```bash
+python -m src.cli import-instruct --repo-dir data/Persian_instruct_dataset --memory-path data/chat_memory.json
+```
+3) حالا چت از این حافظه پاسخ می‌دهد:
+```bash
+python -m src.cli chat --message "هوش مصنوعی را ساده توضیح بده" --memory-path data/chat_memory.json
+```
 ### 2) تحلیل کورپوس یادگیری‌شده
 ```bash
 python -m src.cli analyze-corpus \

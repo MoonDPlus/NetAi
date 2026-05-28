@@ -14,6 +14,7 @@ from src.generate import generate_sentences
 from src.mlp import BinaryCrossEntropy, MLPBinaryClassifier
 from src.text_data import load_labeled_text_csv, train_val_test_split_text
 from src.chatbot import MemoryChatbot
+from src.instruct_import import import_instruct_repo
 
 
 def _to_xy(texts: list[str], labels: list[int], vec: BagOfWordsVectorizer) -> tuple[np.ndarray, np.ndarray]:
@@ -105,11 +106,24 @@ def _collect_text(args: argparse.Namespace) -> None:
     if args.mode == "urls":
         with open(args.input, "r", encoding="utf-8") as f:
             urls = [line.strip() for line in f if line.strip()]
-        count = collect_from_urls(urls, args.out_csv, min_chars=args.min_chars, delay_sec=args.delay_sec, verbose=args.verbose)
+        count = collect_from_urls(
+            urls,
+            args.out_csv,
+            min_chars=args.min_chars,
+            delay_sec=args.delay_sec,
+            verbose=args.verbose,
+            ignore_robots=args.ignore_robots,
+        )
     else:
         with open(args.input, "r", encoding="utf-8") as f:
             sitemaps = [line.strip() for line in f if line.strip()]
-        count = collect_from_sitemaps(sitemaps, args.out_csv, max_urls=args.max_urls, verbose=args.verbose)
+        count = collect_from_sitemaps(
+            sitemaps,
+            args.out_csv,
+            max_urls=args.max_urls,
+            verbose=args.verbose,
+            ignore_robots=args.ignore_robots,
+        )
     print(json.dumps({"saved": args.out_csv, "rows": count}, ensure_ascii=False, indent=2))
 
 
@@ -139,6 +153,12 @@ def _chat_learn(args: argparse.Namespace) -> None:
     bot = MemoryChatbot(memory_path=args.memory_path)
     bot.learn_pair(args.user_message, args.assistant_message)
     print(json.dumps({"saved": True, "memory_path": args.memory_path, "items": len(bot.pairs)}, ensure_ascii=False, indent=2))
+
+
+def _import_instruct(args: argparse.Namespace) -> None:
+    result = import_instruct_repo(args.repo_dir, args.memory_path)
+    result["memory_path"] = args.memory_path
+    print(json.dumps(result, ensure_ascii=False, indent=2))
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Unified CLI for text train/eval")
@@ -174,6 +194,7 @@ def build_parser() -> argparse.ArgumentParser:
     collect_p.add_argument("--min-chars", type=int, default=200)
     collect_p.add_argument("--delay-sec", type=float, default=1.0)
     collect_p.add_argument("--max-urls", type=int, default=200)
+    collect_p.add_argument("--ignore-robots", action="store_true")
     collect_p.add_argument("--verbose", action="store_true")
     collect_p.set_defaults(func=_collect_text)
 
@@ -199,6 +220,11 @@ def build_parser() -> argparse.ArgumentParser:
     learn_p.add_argument("--assistant-message", required=True)
     learn_p.add_argument("--memory-path", default="data/chat_memory.json")
     learn_p.set_defaults(func=_chat_learn)
+
+    instruct_p = sp.add_parser("import-instruct")
+    instruct_p.add_argument("--repo-dir", required=True, help="Path to cloned instruct dataset repo")
+    instruct_p.add_argument("--memory-path", default="data/chat_memory.json")
+    instruct_p.set_defaults(func=_import_instruct)
     return p
 
 
