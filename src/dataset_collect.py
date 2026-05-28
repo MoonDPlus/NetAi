@@ -12,6 +12,7 @@ from urllib.request import Request, urlopen
 from urllib.robotparser import RobotFileParser
 
 DEFAULT_UA = "NetAiDatasetBot/0.1 (+https://example.local)"
+FALLBACK_ALLOWED_UA = "*"
 
 
 @dataclass
@@ -41,14 +42,28 @@ class _TextExtractor(HTMLParser):
                 self.parts.append(d)
 
 
-def _allowed(url: str, user_agent: str, *, strict: bool = False, verbose: bool = False) -> bool:
+def _allowed(
+    url: str,
+    user_agent: str,
+    *,
+    strict: bool = False,
+    verbose: bool = False,
+    ignore_robots: bool = False,
+) -> bool:
+    if ignore_robots:
+        return True
+
     parsed = urlparse(url)
     robots_url = f"{parsed.scheme}://{parsed.netloc}/robots.txt"
     rp = RobotFileParser()
     try:
         rp.set_url(robots_url)
         rp.read()
-        return rp.can_fetch(user_agent, url)
+        # Try with exact UA first, then fallback to wildcard rules.
+        allowed = rp.can_fetch(user_agent, url)
+        if not allowed:
+            allowed = rp.can_fetch(FALLBACK_ALLOWED_UA, url)
+        return allowed
     except Exception as exc:
         if verbose:
             print(f"[robots unavailable] {robots_url} -> {exc}")
@@ -79,6 +94,7 @@ def collect_from_urls(
     delay_sec: float = 1.0,
     timeout: float = 10.0,
     verbose: bool = False,
+    ignore_robots: bool = False,
 ) -> int:
     out_path = Path(out_csv)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -92,7 +108,7 @@ def collect_from_urls(
             continue
         seen.add(url)
 
-        if not _allowed(url, user_agent=user_agent, verbose=verbose):
+        if not _allowed(url, user_agent=user_agent, verbose=verbose, ignore_robots=ignore_robots):
             if verbose:
                 print(f"[skip robots] {url}")
             continue
@@ -131,6 +147,7 @@ def collect_from_sitemaps(
     max_urls: int = 200,
     user_agent: str = DEFAULT_UA,
     verbose: bool = False,
+    ignore_robots: bool = False,
 ) -> int:
     urls: list[str] = []
     loc_re = re.compile(r"<loc>(.*?)</loc>", re.IGNORECASE)
@@ -152,4 +169,10 @@ def collect_from_sitemaps(
         if len(urls) >= max_urls:
             break
 
-    return collect_from_urls(urls, out_csv, user_agent=user_agent, verbose=verbose)
+    return collect_from_urls(
+        urls,
+        out_csv,
+        user_agent=user_agent,
+        verbose=verbose,
+        ignore_robots=ignore_robots,
+    )
