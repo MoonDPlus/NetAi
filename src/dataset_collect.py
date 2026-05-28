@@ -6,14 +6,36 @@ import time
 from dataclasses import dataclass
 from html import unescape
 from html.parser import HTMLParser
-from urllib.parse import urljoin
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import quote, urljoin, urlparse, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 from urllib.robotparser import RobotFileParser
 
 DEFAULT_UA = "NetAiDatasetBot/0.1 (+https://example.local)"
 FALLBACK_ALLOWED_UA = "*"
+
+
+def encode_url(url: str) -> str:
+    """Convert a possibly-unicode IRI to an ASCII-safe URI for urllib."""
+    parts = urlsplit(url.strip())
+    netloc = parts.netloc
+    if parts.hostname:
+        host = parts.hostname.encode("idna").decode("ascii")
+        if ":" in host and not host.startswith("["):
+            host = f"[{host}]"
+        userinfo = ""
+        if parts.username:
+            userinfo = quote(parts.username, safe="")
+            if parts.password:
+                userinfo += f":{quote(parts.password, safe='')}"
+            userinfo += "@"
+        port = f":{parts.port}" if parts.port else ""
+        netloc = f"{userinfo}{host}{port}"
+
+    path = quote(parts.path, safe="/%")
+    query = quote(parts.query, safe="=&;%+,:/?")
+    fragment = quote(parts.fragment, safe="=&;%+,:/?")
+    return urlunsplit((parts.scheme, netloc, path, query, fragment))
 
 
 @dataclass
@@ -67,16 +89,17 @@ def _allowed(
     if ignore_robots:
         return True
 
-    parsed = urlparse(url)
+    safe_url = encode_url(url)
+    parsed = urlparse(safe_url)
     robots_url = f"{parsed.scheme}://{parsed.netloc}/robots.txt"
     rp = RobotFileParser()
     try:
         rp.set_url(robots_url)
         rp.read()
         # Try with exact UA first, then fallback to wildcard rules.
-        allowed = rp.can_fetch(user_agent, url)
+        allowed = rp.can_fetch(user_agent, safe_url)
         if not allowed:
-            allowed = rp.can_fetch(FALLBACK_ALLOWED_UA, url)
+            allowed = rp.can_fetch(FALLBACK_ALLOWED_UA, safe_url)
         return allowed
     except Exception as exc:
         if verbose:
@@ -86,7 +109,7 @@ def _allowed(
 
 
 def _fetch(url: str, user_agent: str, timeout: float) -> str:
-    req = Request(url, headers={"User-Agent": user_agent})
+    req = Request(encode_url(url), headers={"User-Agent": user_agent})
     with urlopen(req, timeout=timeout) as resp:  # noqa: S310
         charset = resp.headers.get_content_charset() or "utf-8"
         return resp.read().decode(charset, errors="ignore")
