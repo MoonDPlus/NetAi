@@ -63,6 +63,17 @@ python -m src.cli train-text --data data/sample_sentiment_fa.csv --model-path te
 python -m src.cli eval-text --data data/sample_sentiment_fa.csv --model-path text_model.json --vocab-path vocab.json
 ```
 
+
+### 6) شروع مکالمه و یادگیری از حرف‌های کاربر
+- پاسخ گرفتن:
+```bash
+python -m src.cli chat --message "سلام، در مورد یادگیری ماشین توضیح بده"
+```
+- یاد دادن یک پاسخ جدید به بات (حافظه‌محور):
+```bash
+python -m src.cli learn-chat   --user-message "چطور مدل رو بهتر کنم؟"   --assistant-message "داده بیشتر، ارزیابی درست، و تنظیم هایپرپارامترها را انجام بده."
+```
+
 ### 5) مسیر XOR
 ```bash
 python -m src.train --epochs 1500 --lr 0.01 --batch-size 32 --repeats 300 --noise 0.05 --optimizer adam --patience 200 --save-path model.json
@@ -109,6 +120,17 @@ python -m src.cli generate-text --data-csv data/raw_web_text.csv --n-sentences 1
 ```bash
 python -m src.cli train-text --data data/sample_sentiment_fa.csv --model-path text_model.json --vocab-path vocab.json --history-path text_history.json --optimizer adam --val-ratio 0.2 --test-ratio 0.2 --patience 50
 python -m src.cli eval-text --data data/sample_sentiment_fa.csv --model-path text_model.json --vocab-path vocab.json
+```
+
+
+### 6) Start chatting and incremental learning
+- Get a reply:
+```bash
+python -m src.cli chat --message "Explain machine learning basics"
+```
+- Teach a new pair into memory:
+```bash
+python -m src.cli learn-chat   --user-message "How can I improve the model?"   --assistant-message "Use more data, evaluate correctly, and tune hyperparameters."
 ```
 
 ### 5) XOR path

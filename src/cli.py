@@ -13,6 +13,7 @@ from src.corpus_tools import load_texts_from_csv, save_stats_json, stats_from_cs
 from src.generate import generate_sentences
 from src.mlp import BinaryCrossEntropy, MLPBinaryClassifier
 from src.text_data import load_labeled_text_csv, train_val_test_split_text
+from src.chatbot import MemoryChatbot
 
 
 def _to_xy(texts: list[str], labels: list[int], vec: BagOfWordsVectorizer) -> tuple[np.ndarray, np.ndarray]:
@@ -126,6 +127,19 @@ def _generate_text(args: argparse.Namespace) -> None:
     generated = generate_sentences(texts, n_sentences=args.n_sentences, max_words=args.max_words, seed=args.seed)
     print(json.dumps({"count": len(generated), "sentences": generated}, ensure_ascii=False, indent=2))
 
+
+
+def _chat_reply(args: argparse.Namespace) -> None:
+    bot = MemoryChatbot(memory_path=args.memory_path)
+    result = bot.respond(args.message)
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+def _chat_learn(args: argparse.Namespace) -> None:
+    bot = MemoryChatbot(memory_path=args.memory_path)
+    bot.learn_pair(args.user_message, args.assistant_message)
+    print(json.dumps({"saved": True, "memory_path": args.memory_path, "items": len(bot.pairs)}, ensure_ascii=False, indent=2))
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Unified CLI for text train/eval")
     sp = p.add_subparsers(dest="cmd", required=True)
@@ -174,6 +188,17 @@ def build_parser() -> argparse.ArgumentParser:
     gen_p.add_argument("--max-words", type=int, default=12)
     gen_p.add_argument("--seed", type=int, default=42)
     gen_p.set_defaults(func=_generate_text)
+
+    chat_p = sp.add_parser("chat")
+    chat_p.add_argument("--message", required=True)
+    chat_p.add_argument("--memory-path", default="data/chat_memory.json")
+    chat_p.set_defaults(func=_chat_reply)
+
+    learn_p = sp.add_parser("learn-chat")
+    learn_p.add_argument("--user-message", required=True)
+    learn_p.add_argument("--assistant-message", required=True)
+    learn_p.add_argument("--memory-path", default="data/chat_memory.json")
+    learn_p.set_defaults(func=_chat_learn)
     return p
 
 
