@@ -67,6 +67,8 @@ python -m src.cli crawl-learn \
   --out-csv data/raw_web_text.csv \
   --min-chars 100 \
   --ask-every 100 \
+  --workers 16 \
+  --delay-sec 0 \
   --verbose \
   --ignore-robots
 ```
@@ -102,6 +104,10 @@ python -m src.cli eval-text --data data/sample_sentiment_fa.csv --model-path tex
 - پاسخ گرفتن:
 ```bash
 python -m src.cli chat --message "سلام، در مورد یادگیری ماشین توضیح بده"
+```
+- پاسخ خودکار از کورپوس جمع‌آوری‌شده (بدون learn-chat دستی):
+```bash
+python -m src.cli chat --message "یادگیری ماشین چیست؟" --corpus-csv data/raw_web_text.csv --top-k 3
 ```
 - یاد دادن یک پاسخ جدید به بات (حافظه‌محور):
 ```bash
@@ -140,6 +146,11 @@ python -m src.cli collect-text --mode urls --input data/seed_urls.txt --out-csv 
 # اگر robots.txt در دسترس نباشد، پیام [robots unavailable] می‌بینی ولی crawl ادامه می‌یابد.
 ```
 
+### 1.1) Faster continuous crawling with link discovery
+```bash
+python -m src.cli crawl-learn --input data/seed_urls.txt --out-csv data/raw_web_text.csv --min-chars 100 --ask-every 100 --workers 16 --delay-sec 0 --verbose --ignore-robots
+```
+
 ### 2) Analyze learned corpus
 ```bash
 python -m src.cli analyze-corpus --data-csv data/raw_web_text.csv --out-json data/corpus_stats.json
@@ -161,6 +172,10 @@ python -m src.cli eval-text --data data/sample_sentiment_fa.csv --model-path tex
 - Get a reply:
 ```bash
 python -m src.cli chat --message "Explain machine learning basics"
+```
+- Auto-answer from the crawled corpus (no manual learn-chat required):
+```bash
+python -m src.cli chat --message "What is machine learning?" --corpus-csv data/raw_web_text.csv --top-k 3
 ```
 - Teach a new pair into memory:
 ```bash

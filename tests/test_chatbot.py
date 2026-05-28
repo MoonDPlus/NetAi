@@ -3,7 +3,7 @@ import unittest
 import json
 from pathlib import Path
 
-from src.chatbot import MemoryChatbot
+from src.chatbot import MemoryChatbot, answer_from_corpus
 
 
 class TestMemoryChatbot(unittest.TestCase):
@@ -26,6 +26,19 @@ class TestMemoryChatbot(unittest.TestCase):
             bot = MemoryChatbot(memory_path=path)
             res = bot.respond("سلام")
             self.assertEqual(res["reply"], "سلام!")
+
+    def test_respond_from_corpus_without_manual_training(self):
+        with tempfile.TemporaryDirectory() as d:
+            bot = MemoryChatbot(memory_path=Path(d) / "missing_mem.json")
+            texts = ["هوش مصنوعی شاخه‌ای از علوم کامپیوتر است. یادگیری ماشین به مدل‌ها کمک می‌کند از داده یاد بگیرند."]
+            res = bot.respond("هوش مصنوعی چیست", corpus_texts=texts)
+            self.assertEqual(res["mode"], "corpus")
+            self.assertIn("هوش مصنوعی", res["reply"])
+
+    def test_answer_from_corpus_ranks_relevant_sentence(self):
+        texts = ["گربه حیوان خانگی است. شبکه عصبی برای یادگیری عمیق استفاده می‌شود."]
+        res = answer_from_corpus("یادگیری عمیق", texts, top_k=1)
+        self.assertIn("یادگیری عمیق", res["reply"])
 
 
 if __name__ == "__main__":

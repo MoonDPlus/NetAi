@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import re
 import time
+from concurrent.futures import FIRST_COMPLETED, Future, wait
 from dataclasses import dataclass
 from html import unescape
 from html.parser import HTMLParser
@@ -141,6 +142,47 @@ def extract_links(html: str, base_url: str) -> list[str]:
     return out
 
 
+
+def _write_crawl_rows(out_path: Path, rows: list[CrawlItem]) -> None:
+    with out_path.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=["url", "text"])
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({"url": row.url, "text": row.text})
+
+
+def _crawl_page(
+    url: str,
+    *,
+    user_agent: str,
+    min_chars: int,
+    timeout: float,
+    verbose: bool,
+    ignore_robots: bool,
+) -> tuple[str, CrawlItem | None, list[str]]:
+    if not _allowed(url, user_agent=user_agent, verbose=verbose, ignore_robots=ignore_robots):
+        if verbose:
+            print(f"[skip robots] {url}")
+        return url, None, []
+
+    try:
+        html = _fetch(url, user_agent=user_agent, timeout=timeout)
+    except Exception as exc:
+        if verbose:
+            print(f"[skip fetch] {url} -> {exc}")
+        return url, None, []
+
+    text = extract_clean_text(html)
+    item = None
+    if len(text) >= min_chars:
+        item = CrawlItem(url=url, text=text)
+        if verbose:
+            print(f"[ok] {url} len={len(text)}")
+    elif verbose:
+        print(f"[skip short] {url} len={len(text)}")
+
+    return url, item, extract_links(html, url)
+
 def crawl_discovery_loop(
     seed_urls: list[str],
     out_csv: str | Path,
@@ -152,63 +194,76 @@ def crawl_discovery_loop(
     verbose: bool = False,
     ignore_robots: bool = False,
     ask_every: int = 100,
+    workers: int = 8,
 ) -> dict[str, int | bool]:
+    from concurrent.futures import ThreadPoolExecutor
+
     out_path = Path(out_csv)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     queue: list[str] = [u.strip() for u in seed_urls if u.strip()]
+    queued: set[str] = set(queue)
     seen: set[str] = set()
     rows: list[CrawlItem] = []
     scanned = 0
     stopped_by_user = False
+    max_workers = max(1, workers)
 
-    while queue:
-        url = queue.pop(0)
-        if url in seen:
-            continue
-        seen.add(url)
-        scanned += 1
+    def submit_next(executor: ThreadPoolExecutor, in_flight: dict[Future, str]) -> None:
+        while queue and len(in_flight) < max_workers:
+            url = queue.pop(0)
+            queued.discard(url)
+            if url in seen:
+                continue
+            seen.add(url)
+            future = executor.submit(
+                _crawl_page,
+                url,
+                user_agent=user_agent,
+                min_chars=min_chars,
+                timeout=timeout,
+                verbose=verbose,
+                ignore_robots=ignore_robots,
+            )
+            in_flight[future] = url
+            if delay_sec > 0:
+                time.sleep(delay_sec)
 
-        if not _allowed(url, user_agent=user_agent, verbose=verbose, ignore_robots=ignore_robots):
-            if verbose:
-                print(f"[skip robots] {url}")
-            continue
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        in_flight: dict[Future, str] = {}
+        submit_next(executor, in_flight)
 
-        try:
-            html = _fetch(url, user_agent=user_agent, timeout=timeout)
-        except Exception as exc:
-            if verbose:
-                print(f"[skip fetch] {url} -> {exc}")
-            continue
+        while in_flight:
+            done, _ = wait(in_flight, return_when=FIRST_COMPLETED)
+            for future in done:
+                in_flight.pop(future, None)
+                scanned += 1
+                _, item, links = future.result()
+                if item is not None:
+                    rows.append(item)
+                for new_url in links:
+                    if new_url not in seen and new_url not in queued:
+                        queue.append(new_url)
+                        queued.add(new_url)
 
-        text = extract_clean_text(html)
-        if len(text) >= min_chars:
-            rows.append(CrawlItem(url=url, text=text))
-            if verbose:
-                print(f"[ok] {url} len={len(text)}")
-        elif verbose:
-            print(f"[skip short] {url} len={len(text)}")
+                if ask_every > 0 and scanned % ask_every == 0:
+                    _write_crawl_rows(out_path, rows)
+                    prompt = f"Scanned {scanned} links (saved={len(rows)}, queued={len(queue)}). Continue? [y/N]: "
+                    answer = input(prompt).strip().lower()
+                    if answer not in {"y", "yes"}:
+                        stopped_by_user = True
+                        queue.clear()
+                        for pending in in_flight:
+                            pending.cancel()
+                        in_flight.clear()
+                        break
 
-        for new_url in extract_links(html, url):
-            if new_url not in seen:
-                queue.append(new_url)
-
-        if ask_every > 0 and scanned % ask_every == 0:
-            prompt = f"Scanned {scanned} links (saved={len(rows)}, queued={len(queue)}). Continue? [y/N]: "
-            answer = input(prompt).strip().lower()
-            if answer not in {"y", "yes"}:
-                stopped_by_user = True
+            if stopped_by_user:
                 break
+            submit_next(executor, in_flight)
 
-        time.sleep(delay_sec)
-
-    with out_path.open("w", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=["url", "text"])
-        writer.writeheader()
-        for row in rows:
-            writer.writerow({"url": row.url, "text": row.text})
-
-    return {"scanned": scanned, "saved": len(rows), "stopped_by_user": stopped_by_user}
+    _write_crawl_rows(out_path, rows)
+    return {"scanned": scanned, "saved": len(rows), "queued": len(queue), "stopped_by_user": stopped_by_user}
 
 
 def collect_from_urls(
@@ -257,11 +312,7 @@ def collect_from_urls(
             print(f"[ok] {url} len={len(text)}")
         time.sleep(delay_sec)
 
-    with out_path.open("w", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=["url", "text"])
-        writer.writeheader()
-        for row in rows:
-            writer.writerow({"url": row.url, "text": row.text})
+    _write_crawl_rows(out_path, rows)
 
     return len(rows)
 

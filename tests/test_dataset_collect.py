@@ -1,6 +1,10 @@
+import csv
+import tempfile
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
-from src.dataset_collect import encode_url, extract_clean_text, extract_links
+from src.dataset_collect import crawl_discovery_loop, encode_url, extract_clean_text, extract_links
 
 
 class TestDatasetCollect(unittest.TestCase):
@@ -25,6 +29,31 @@ class TestDatasetCollect(unittest.TestCase):
         url = encode_url("https://fa.wiktionary.org/wiki/گربه")
         self.assertEqual(url, "https://fa.wiktionary.org/wiki/%DA%AF%D8%B1%D8%A8%D9%87")
         url.encode("ascii")
+
+    def test_crawl_discovery_loop_discovers_links_with_workers(self):
+        pages = {
+            "https://example.com/start": '<p>این متن شروع برای ذخیره شدن کافی است</p><a href="/next">next</a>',
+            "https://example.com/next": "<p>این متن صفحه بعدی برای ذخیره شدن کافی است</p>",
+        }
+
+        def fake_fetch(url, user_agent, timeout):
+            return pages[url]
+
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d) / "crawl.csv"
+            with patch("src.dataset_collect._fetch", side_effect=fake_fetch):
+                stats = crawl_discovery_loop(
+                    ["https://example.com/start"],
+                    out,
+                    min_chars=10,
+                    workers=2,
+                    ask_every=0,
+                    ignore_robots=True,
+                )
+            self.assertEqual(stats["scanned"], 2)
+            with out.open("r", encoding="utf-8", newline="") as f:
+                rows = list(csv.DictReader(f))
+            self.assertEqual(len(rows), 2)
 
 
 if __name__ == "__main__":
