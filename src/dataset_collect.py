@@ -6,6 +6,7 @@ import time
 from dataclasses import dataclass
 from html import unescape
 from html.parser import HTMLParser
+from urllib.parse import urljoin
 from pathlib import Path
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
@@ -40,6 +41,19 @@ class _TextExtractor(HTMLParser):
             d = data.strip()
             if d:
                 self.parts.append(d)
+
+
+class _LinkExtractor(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.links: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs):
+        if tag != "a":
+            return
+        for key, value in attrs:
+            if key == "href" and value:
+                self.links.append(value.strip())
 
 
 def _allowed(
@@ -83,6 +97,95 @@ def extract_clean_text(html: str) -> str:
     parser.feed(html)
     text = unescape(" ".join(parser.parts))
     return re.sub(r"\s+", " ", text).strip()
+
+
+def extract_links(html: str, base_url: str) -> list[str]:
+    parser = _LinkExtractor()
+    parser.feed(html)
+    out: list[str] = []
+    seen: set[str] = set()
+    for href in parser.links:
+        absolute = urljoin(base_url, href)
+        parsed = urlparse(absolute)
+        if parsed.scheme not in {"http", "https"}:
+            continue
+        normalized = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+        if parsed.query:
+            normalized += f"?{parsed.query}"
+        if normalized not in seen:
+            seen.add(normalized)
+            out.append(normalized)
+    return out
+
+
+def crawl_discovery_loop(
+    seed_urls: list[str],
+    out_csv: str | Path,
+    *,
+    user_agent: str = DEFAULT_UA,
+    min_chars: int = 200,
+    delay_sec: float = 1.0,
+    timeout: float = 10.0,
+    verbose: bool = False,
+    ignore_robots: bool = False,
+    ask_every: int = 100,
+) -> dict[str, int | bool]:
+    out_path = Path(out_csv)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    queue: list[str] = [u.strip() for u in seed_urls if u.strip()]
+    seen: set[str] = set()
+    rows: list[CrawlItem] = []
+    scanned = 0
+    stopped_by_user = False
+
+    while queue:
+        url = queue.pop(0)
+        if url in seen:
+            continue
+        seen.add(url)
+        scanned += 1
+
+        if not _allowed(url, user_agent=user_agent, verbose=verbose, ignore_robots=ignore_robots):
+            if verbose:
+                print(f"[skip robots] {url}")
+            continue
+
+        try:
+            html = _fetch(url, user_agent=user_agent, timeout=timeout)
+        except Exception as exc:
+            if verbose:
+                print(f"[skip fetch] {url} -> {exc}")
+            continue
+
+        text = extract_clean_text(html)
+        if len(text) >= min_chars:
+            rows.append(CrawlItem(url=url, text=text))
+            if verbose:
+                print(f"[ok] {url} len={len(text)}")
+        elif verbose:
+            print(f"[skip short] {url} len={len(text)}")
+
+        for new_url in extract_links(html, url):
+            if new_url not in seen:
+                queue.append(new_url)
+
+        if ask_every > 0 and scanned % ask_every == 0:
+            prompt = f"Scanned {scanned} links (saved={len(rows)}, queued={len(queue)}). Continue? [y/N]: "
+            answer = input(prompt).strip().lower()
+            if answer not in {"y", "yes"}:
+                stopped_by_user = True
+                break
+
+        time.sleep(delay_sec)
+
+    with out_path.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=["url", "text"])
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({"url": row.url, "text": row.text})
+
+    return {"scanned": scanned, "saved": len(rows), "stopped_by_user": stopped_by_user}
 
 
 def collect_from_urls(

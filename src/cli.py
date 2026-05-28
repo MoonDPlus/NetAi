@@ -7,7 +7,7 @@ import numpy as np
 
 from src.features import BagOfWordsVectorizer
 
-from src.dataset_collect import collect_from_sitemaps, collect_from_urls
+from src.dataset_collect import collect_from_sitemaps, collect_from_urls, crawl_discovery_loop
 from src.metrics import classification_report
 from src.corpus_tools import load_texts_from_csv, save_stats_json, stats_from_csv
 from src.generate import generate_sentences
@@ -160,6 +160,22 @@ def _import_instruct(args: argparse.Namespace) -> None:
     result["memory_path"] = args.memory_path
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
+
+def _crawl_learn(args: argparse.Namespace) -> None:
+    with open(args.input, "r", encoding="utf-8") as f:
+        seeds = [line.strip() for line in f if line.strip()]
+    result = crawl_discovery_loop(
+        seeds,
+        args.out_csv,
+        min_chars=args.min_chars,
+        delay_sec=args.delay_sec,
+        timeout=args.timeout,
+        verbose=args.verbose,
+        ignore_robots=args.ignore_robots,
+        ask_every=args.ask_every,
+    )
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Unified CLI for text train/eval")
     sp = p.add_subparsers(dest="cmd", required=True)
@@ -225,6 +241,17 @@ def build_parser() -> argparse.ArgumentParser:
     instruct_p.add_argument("--repo-dir", required=True, help="Path to cloned instruct dataset repo")
     instruct_p.add_argument("--memory-path", default="data/chat_memory.json")
     instruct_p.set_defaults(func=_import_instruct)
+
+    crawl_p = sp.add_parser("crawl-learn")
+    crawl_p.add_argument("--input", required=True, help="Seed URL file (one URL per line)")
+    crawl_p.add_argument("--out-csv", default="data/raw_web_text.csv")
+    crawl_p.add_argument("--min-chars", type=int, default=200)
+    crawl_p.add_argument("--delay-sec", type=float, default=1.0)
+    crawl_p.add_argument("--timeout", type=float, default=10.0)
+    crawl_p.add_argument("--ignore-robots", action="store_true")
+    crawl_p.add_argument("--ask-every", type=int, default=100)
+    crawl_p.add_argument("--verbose", action="store_true")
+    crawl_p.set_defaults(func=_crawl_learn)
     return p
 
 

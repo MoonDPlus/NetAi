@@ -57,6 +57,19 @@ python -m src.cli import-instruct --repo-dir data/Persian_instruct_dataset --mem
 ```bash
 python -m src.cli chat --message "هوش مصنوعی را ساده توضیح بده" --memory-path data/chat_memory.json
 ```
+
+### 1.3) خزیدن پیوسته (infinite-style) با کشف لینک‌های جدید
+این حالت از seed شروع می‌کند، از هر صفحه لینک جدید پیدا می‌کند، و ادامه می‌دهد.
+هر ۱۰۰ لینک (یا مقدار `--ask-every`) از شما می‌پرسد ادامه بدهد یا نه:
+```bash
+python -m src.cli crawl-learn \
+  --input data/seed_urls.txt \
+  --out-csv data/raw_web_text.csv \
+  --min-chars 100 \
+  --ask-every 100 \
+  --verbose \
+  --ignore-robots
+```
 ### 2) تحلیل کورپوس یادگیری‌شده
 ```bash
 python -m src.cli analyze-corpus \
