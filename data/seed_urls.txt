@@ -1,4 +1,10 @@
 https://fa.wiktionary.org/wiki/گربه
 https://fa.wiktionary.org/wiki/خانه
+https://fa.wiktionary.org/wiki/کتاب
+https://fa.wiktionary.org/wiki/دانش
 https://fa.wikipedia.org/wiki/هوش_مصنوعی
 https://fa.wikipedia.org/wiki/یادگیری_ماشین
+https://fa.wikipedia.org/wiki/پردازش_زبان_طبیعی
+https://fa.wikipedia.org/wiki/یادگیری_عمیق
+https://fa.wikipedia.org/wiki/شبکه_عصبی_مصنوعی
+https://fa.wikipedia.org/wiki/زبان_فارسی

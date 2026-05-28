@@ -8,6 +8,17 @@
 - تحلیل آماری کورپوس (کلمات/جمله‌ها/ظرفیت تقریبی)
 - تولید جمله‌های جدید بر پایه bigram chain از کورپوس جمع‌آوری‌شده
 
+
+### دیتاست‌های پیشنهادی برای شروع (انتخاب‌شده)
+- لیست curated در `data/datasets_catalog.md` اضافه شد (Sentiment + Corpus عمومی فارسی).
+- برای crawl اولیه، `data/seed_urls.txt` بزرگ‌تر شده تا پوشش موضوعی بهتر شود.
+
+### جریان پیشنهادی عملی
+1) یک دیتاست برچسب‌دار از catalog انتخاب کن و به قالب `text,label` تبدیل کن.
+2) در کنار آن با `collect-text` یک کورپوس بزرگ unlabeled بساز.
+3) با `analyze-corpus` وضعیت یادگیری (کلمه/جمله/ظرفیت) را بعد از هر راند ثبت کن.
+4) با `generate-text` کیفیت تقریبی یادگیری زبانی را بررسی کن.
+
 ## نصب و اجرا (فارسی)
 ```bash
 python3 -m venv .venv
@@ -59,6 +70,17 @@ python -m src.infer --model-path model.json --x1 0 --x2 1
 ```
 
 ---
+
+
+### Recommended starter datasets (curated)
+- A curated list is included at `data/datasets_catalog.md` (Persian sentiment + general corpora).
+- `data/seed_urls.txt` has been expanded for broader web-crawl bootstrapping.
+
+### Practical workflow
+1) Pick one labeled dataset from the catalog and normalize to `text,label`.
+2) Build a large unlabeled corpus with `collect-text`.
+3) Track learning progress with `analyze-corpus` after each crawl round.
+4) Probe language learning quality with `generate-text`.
 
 ## Installation & Usage (English)
 ```bash
