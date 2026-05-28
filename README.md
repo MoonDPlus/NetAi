@@ -4,7 +4,7 @@
 
 ## مرحله پیشرفته‌تر (Phase Advanced)
 در این مرحله، علاوه بر آموزش مدل، یک چرخه کامل **جمع‌آوری → تحلیل → تولید جمله** اضافه شده است:
-- Crawl خودکار از اینترنت با رعایت `robots.txt`
+- Crawl خودکار از اینترنت با رعایت `robots.txt` (در صورت خطای دسترسی به robots، حالت پیش‌فرض fail-open است تا کل جمع‌آوری قفل نشود)
 - تحلیل آماری کورپوس (کلمات/جمله‌ها/ظرفیت تقریبی)
 - تولید جمله‌های جدید بر پایه bigram chain از کورپوس جمع‌آوری‌شده
 
@@ -70,6 +70,7 @@ pip install -r requirements.txt
 ### 1) Auto-collect from web
 ```bash
 python -m src.cli collect-text --mode urls --input data/seed_urls.txt --out-csv data/raw_web_text.csv --min-chars 100 --verbose
+# اگر robots.txt در دسترس نباشد، پیام [robots unavailable] می‌بینی ولی crawl ادامه می‌یابد.
 ```
 
 ### 2) Analyze learned corpus

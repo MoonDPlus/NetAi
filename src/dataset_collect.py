@@ -41,7 +41,7 @@ class _TextExtractor(HTMLParser):
                 self.parts.append(d)
 
 
-def _allowed(url: str, user_agent: str) -> bool:
+def _allowed(url: str, user_agent: str, *, strict: bool = False, verbose: bool = False) -> bool:
     parsed = urlparse(url)
     robots_url = f"{parsed.scheme}://{parsed.netloc}/robots.txt"
     rp = RobotFileParser()
@@ -49,8 +49,11 @@ def _allowed(url: str, user_agent: str) -> bool:
         rp.set_url(robots_url)
         rp.read()
         return rp.can_fetch(user_agent, url)
-    except Exception:
-        return False
+    except Exception as exc:
+        if verbose:
+            print(f"[robots unavailable] {robots_url} -> {exc}")
+        # Fail-open by default so connectivity/robots fetch issues do not block all crawling.
+        return not strict
 
 
 def _fetch(url: str, user_agent: str, timeout: float) -> str:
@@ -89,7 +92,7 @@ def collect_from_urls(
             continue
         seen.add(url)
 
-        if not _allowed(url, user_agent=user_agent):
+        if not _allowed(url, user_agent=user_agent, verbose=verbose):
             if verbose:
                 print(f"[skip robots] {url}")
             continue
