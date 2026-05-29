@@ -1,0 +1,7 @@
+# Server/crawler/API mode intentionally uses only Python standard library.
+# No PyPI packages are required for:
+#   python -m src.cli serve-api
+#   python -m src.cli crawl-learn
+#   python -m src.cli chat --corpus-csv ...
+# Install requirements.txt only when you need NumPy-based ML commands
+# such as train-text/eval-text or src.train/src.infer.
