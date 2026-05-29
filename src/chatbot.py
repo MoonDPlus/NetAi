@@ -1,0 +1,214 @@
+from __future__ import annotations
+
+import json
+import re
+from pathlib import Path
+
+TOKEN_RE = re.compile(r"\w+", re.UNICODE)
+SENT_SPLIT_RE = re.compile(r"(?<=[.!؟?])\s+|[\n\r]+")
+GREETING_TOKENS = {"سلام", "درود", "hello", "hi"}
+PERSIAN_RE = re.compile(r"[\u0600-\u06ff]")
+SHORT_QUERY_MAX_TOKENS = 2
+
+
+def _tokenize(text: str) -> set[str]:
+    return {t.lower() for t in TOKEN_RE.findall(text)}
+
+
+def _is_greeting(tokens: set[str]) -> bool:
+    return bool(tokens & GREETING_TOKENS) and len(tokens) <= SHORT_QUERY_MAX_TOKENS
+
+
+def detect_language(text: str) -> str:
+    return "fa" if PERSIAN_RE.search(text) else "en"
+
+
+def _message(key: str, lang: str) -> str:
+    messages = {
+        "greeting": {
+            "fa": "سلام! من آماده‌ام. درباره چه موضوعی می‌خوای صحبت کنیم یا از کورپوس یادگرفته‌شده چی بپرسی؟",
+            "en": "Hi! I am ready. What topic do you want to discuss or ask from the learned corpus?",
+        },
+        "empty": {
+            "fa": "هنوز نمونه مشابهی در حافظه یا کورپوس ندارم. با crawl-learn داده جمع کن یا با --corpus-csv کورپوس جمع‌شده را به chat بده.",
+            "en": "I do not have a similar memory or corpus answer yet. Collect data with crawl-learn or pass the learned corpus with --corpus-csv.",
+        },
+        "no_corpus": {
+            "fa": "در کورپوس فعلی جمله مرتبطی پیدا نکردم. اول با crawl-learn داده بیشتری جمع کن.",
+            "en": "I could not find a relevant sentence in the current corpus. Collect more relevant data with crawl-learn first.",
+        },
+        "low_corpus": {
+            "fa": "پاسخ مرتبط و قابل اعتماد در کورپوس پیدا نکردم. سوال را دقیق‌تر بپرس یا داده مرتبط بیشتری جمع کن.",
+            "en": "I could not find a reliable relevant answer in the corpus. Ask more specifically or collect more relevant data.",
+        },
+        "low_memory": {
+            "fa": "یک نمونه خیلی کم‌ارتباط پیدا کردم، اما برای جلوگیری از جواب پرت آن را استفاده نکردم. سوال را دقیق‌تر بپرس یا داده مرتبط بیشتری بده.",
+            "en": "I found only a weakly related memory item, so I did not use it as an answer. Ask more specifically or add more relevant data.",
+        },
+        "invalid": {
+            "fa": "پیام قابل تحلیل نبود.",
+            "en": "The message could not be analyzed.",
+        },
+    }
+    return messages[key][lang if lang in {"fa", "en"} else "en"]
+
+
+def greeting_reply(lang: str = "fa") -> dict[str, object]:
+    return {
+        "reply": _message("greeting", lang),
+        "similarity": 1.0,
+        "source": "built-in greeting",
+        "mode": "greeting",
+        "language": lang,
+    }
+
+
+def split_sentences(text: str) -> list[str]:
+    sentences: list[str] = []
+    for part in SENT_SPLIT_RE.split(text):
+        sent = re.sub(r"\s+", " ", part).strip(" \t\n\r.,،؛:؛")
+        if len(sent) >= 20:
+            sentences.append(sent)
+    return sentences
+
+
+def answer_from_corpus(
+    user_text: str,
+    texts: list[str],
+    *,
+    top_k: int = 3,
+    min_similarity: float = 0.12,
+) -> dict[str, object]:
+    lang = detect_language(user_text)
+    query_tokens = _tokenize(user_text)
+    if _is_greeting(query_tokens):
+        return greeting_reply(lang)
+    if not query_tokens:
+        return {"reply": _message("invalid", lang), "similarity": 0.0, "source": None, "mode": "corpus", "language": lang}
+
+    scored: list[tuple[float, str]] = []
+    for text in texts:
+        for sentence in split_sentences(text):
+            toks = _tokenize(sentence)
+            if not toks:
+                continue
+            overlap = len(query_tokens & toks)
+            if overlap == 0:
+                continue
+            score = overlap / (len(query_tokens) ** 0.5 * len(toks) ** 0.5)
+            scored.append((score, sentence))
+
+    if not scored:
+        return {
+            "reply": _message("no_corpus", lang),
+            "similarity": 0.0,
+            "source": None,
+            "mode": "corpus",
+            "language": lang,
+        }
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    if scored[0][0] < min_similarity:
+        return {
+            "reply": _message("low_corpus", lang),
+            "similarity": round(scored[0][0], 4),
+            "source": scored[0][1],
+            "mode": "low_confidence",
+            "language": lang,
+        }
+    selected: list[str] = []
+    seen: set[str] = set()
+    for score, sentence in scored:
+        if sentence in seen:
+            continue
+        selected.append(sentence)
+        seen.add(sentence)
+        if len(selected) >= top_k:
+            break
+
+    reply = " ".join(selected)
+    return {"reply": reply, "similarity": round(scored[0][0], 4), "source": selected[0], "mode": "corpus", "language": lang}
+
+
+class MemoryChatbot:
+    def __init__(self, memory_path: str | Path = "data/chat_memory.json") -> None:
+        self.memory_path = Path(memory_path)
+        self.pairs: list[dict[str, str]] = []
+        self._load()
+
+    def _load(self) -> None:
+        if self.memory_path.exists():
+            raw = json.loads(self.memory_path.read_text(encoding="utf-8"))
+            # Backward/forward compatibility:
+            # - old format: [ {"user": "...", "assistant": "..."} ]
+            # - new format: { "pairs": [ ... ] }
+            if isinstance(raw, dict):
+                raw = raw.get("pairs", [])
+            if not isinstance(raw, list):
+                raw = []
+
+            cleaned: list[dict[str, str]] = []
+            for item in raw:
+                if not isinstance(item, dict):
+                    continue
+                user = item.get("user")
+                assistant = item.get("assistant")
+                if isinstance(user, str) and isinstance(assistant, str):
+                    cleaned.append({"user": user, "assistant": assistant})
+            self.pairs = cleaned
+
+    def _save(self) -> None:
+        self.memory_path.parent.mkdir(parents=True, exist_ok=True)
+        self.memory_path.write_text(json.dumps(self.pairs, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def learn_pair(self, user_text: str, assistant_text: str) -> None:
+        self.pairs.append({"user": user_text.strip(), "assistant": assistant_text.strip()})
+        self._save()
+
+    def respond(
+        self,
+        user_text: str,
+        corpus_texts: list[str] | None = None,
+        *,
+        top_k: int = 3,
+        min_similarity: float = 0.15,
+    ) -> dict[str, object]:
+        lang = detect_language(user_text)
+        query_tokens = _tokenize(user_text)
+        if _is_greeting(query_tokens):
+            return greeting_reply(lang)
+        best = None
+        best_score = -1.0
+        for item in self.pairs:
+            toks = _tokenize(item["user"])
+            if not toks:
+                continue
+            inter = len(query_tokens & toks)
+            union = len(query_tokens | toks)
+            score = inter / union if union else 0.0
+            if score > best_score:
+                best_score = score
+                best = item
+
+        if best is not None and best_score >= min_similarity:
+            return {
+                "reply": best["assistant"],
+                "similarity": round(best_score, 4),
+                "source": best["user"],
+                "mode": "memory",
+                "language": lang,
+            }
+
+        if corpus_texts:
+            return answer_from_corpus(user_text, corpus_texts, top_k=top_k, min_similarity=min_similarity)
+
+        if best is not None and best_score > 0:
+            return {
+                "reply": _message("low_memory", lang),
+                "similarity": round(best_score, 4),
+                "source": best["user"],
+                "mode": "low_confidence",
+                "language": lang,
+            }
+
+        return {"reply": _message("empty", lang), "similarity": 0.0, "source": None, "mode": "empty", "language": lang}
