@@ -116,16 +116,32 @@ def _fetch(url: str, user_agent: str, timeout: float) -> str:
         return resp.read().decode(charset, errors="ignore")
 
 
+def _strip_tags_fallback(html: str) -> str:
+    cleaned = re.sub(r"(?is)<(script|style|noscript).*?>.*?</\1>", " ", html)
+    cleaned = re.sub(r"(?is)<!--.*?-->", " ", cleaned)
+    cleaned = re.sub(r"(?is)<[^>]+>", " ", cleaned)
+    text = unescape(cleaned)
+    return re.sub(r"\s+", " ", text).strip()
+
+
 def extract_clean_text(html: str) -> str:
     parser = _TextExtractor()
-    parser.feed(html)
+    try:
+        parser.feed(html)
+        parser.close()
+    except (AssertionError, ValueError):
+        return _strip_tags_fallback(html)
     text = unescape(" ".join(parser.parts))
     return re.sub(r"\s+", " ", text).strip()
 
 
 def extract_links(html: str, base_url: str) -> list[str]:
     parser = _LinkExtractor()
-    parser.feed(html)
+    try:
+        parser.feed(html)
+        parser.close()
+    except (AssertionError, ValueError):
+        parser.links.extend(re.findall(r'''(?i)href=["']([^"']+)["']''', html))
     out: list[str] = []
     seen: set[str] = set()
     for href in parser.links:
@@ -243,9 +259,15 @@ def crawl_discovery_loop(
         while in_flight:
             done, _ = wait(in_flight, return_when=FIRST_COMPLETED)
             for future in done:
-                in_flight.pop(future, None)
+                url = in_flight.pop(future, None)
                 scanned += 1
-                _, item, links = future.result()
+                try:
+                    _, item, links = future.result()
+                except Exception as exc:
+                    if verbose:
+                        print(f"[skip worker] {url} -> {exc}")
+                    item = None
+                    links = []
                 if item is not None:
                     rows.append(item)
                 for new_url in links:

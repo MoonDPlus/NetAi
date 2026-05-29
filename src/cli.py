@@ -3,28 +3,41 @@ from __future__ import annotations
 import argparse
 import json
 
-import numpy as np
-
-from src.features import BagOfWordsVectorizer
-
 from src.dataset_collect import collect_from_sitemaps, collect_from_urls, crawl_discovery_loop
-from src.metrics import classification_report
 from src.corpus_tools import load_texts_from_csv, save_stats_json, stats_from_csv
 from src.generate import generate_sentences
-from src.mlp import BinaryCrossEntropy, MLPBinaryClassifier
-from src.text_data import load_labeled_text_csv, train_val_test_split_text
 from src.chatbot import MemoryChatbot
 from src.instruct_import import import_instruct_repo
 from src.api import run_api_server
 
 
-def _to_xy(texts: list[str], labels: list[int], vec: BagOfWordsVectorizer) -> tuple[np.ndarray, np.ndarray]:
+def _load_numpy_stack():
+    import numpy as np
+
+    from src.features import BagOfWordsVectorizer
+    from src.metrics import classification_report
+    from src.mlp import BinaryCrossEntropy, MLPBinaryClassifier
+    from src.text_data import load_labeled_text_csv, train_val_test_split_text
+
+    return np, BagOfWordsVectorizer, classification_report, BinaryCrossEntropy, MLPBinaryClassifier, load_labeled_text_csv, train_val_test_split_text
+
+
+def _to_xy(texts, labels, vec, np):
     x = vec.transform(texts)
     y = np.array(labels, dtype=float).reshape(-1, 1)
     return x, y
 
 
 def _train_text(args: argparse.Namespace) -> None:
+    (
+        np,
+        BagOfWordsVectorizer,
+        classification_report,
+        BinaryCrossEntropy,
+        MLPBinaryClassifier,
+        load_labeled_text_csv,
+        train_val_test_split_text,
+    ) = _load_numpy_stack()
     texts, labels = load_labeled_text_csv(args.data)
     x_train_t, y_train_l, x_val_t, y_val_l, x_test_t, y_test_l = train_val_test_split_text(
         texts, labels, val_ratio=args.val_ratio, test_ratio=args.test_ratio, seed=args.seed
@@ -33,9 +46,9 @@ def _train_text(args: argparse.Namespace) -> None:
     vec = BagOfWordsVectorizer(max_features=args.max_features)
     vec.fit(x_train_t)
 
-    x_train, y_train = _to_xy(x_train_t, y_train_l, vec)
-    x_val, y_val = _to_xy(x_val_t, y_val_l, vec)
-    x_test, y_test = _to_xy(x_test_t, y_test_l, vec)
+    x_train, y_train = _to_xy(x_train_t, y_train_l, vec, np)
+    x_val, y_val = _to_xy(x_val_t, y_val_l, vec, np)
+    x_test, y_test = _to_xy(x_test_t, y_test_l, vec, np)
 
     model = MLPBinaryClassifier(seed=args.seed, in_features=x_train.shape[1], hidden_size=args.hidden_size)
     criterion = BinaryCrossEntropy()
@@ -89,6 +102,15 @@ def _train_text(args: argparse.Namespace) -> None:
 
 
 def _eval_text(args: argparse.Namespace) -> None:
+    (
+        np,
+        BagOfWordsVectorizer,
+        classification_report,
+        _,
+        MLPBinaryClassifier,
+        load_labeled_text_csv,
+        _,
+    ) = _load_numpy_stack()
     texts, labels = load_labeled_text_csv(args.data)
     vec = BagOfWordsVectorizer.load(args.vocab_path)
     x = vec.transform(texts)

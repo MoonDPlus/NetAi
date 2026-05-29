@@ -31,6 +31,19 @@ class TestDatasetCollect(unittest.TestCase):
         self.assertEqual(url, "https://fa.wiktionary.org/wiki/%DA%AF%D8%B1%D8%A8%D9%87")
         url.encode("ascii")
 
+    def test_extract_clean_text_falls_back_when_html_parser_asserts(self):
+        html = '<html><body><script>bad()</script><p>سلام دنیا</p></body></html>'
+        with patch("src.dataset_collect._TextExtractor.feed", side_effect=AssertionError("bad marked section")):
+            text = extract_clean_text(html)
+        self.assertIn("سلام دنیا", text)
+        self.assertNotIn("bad()", text)
+
+    def test_extract_links_falls_back_when_html_parser_asserts(self):
+        html = '<a href="/fallback">fallback</a>'
+        with patch("src.dataset_collect._LinkExtractor.feed", side_effect=AssertionError("bad marked section")):
+            links = extract_links(html, "https://example.com/base")
+        self.assertEqual(links, ["https://example.com/fallback"])
+
     def test_crawl_discovery_loop_discovers_links_with_workers(self):
         pages = {
             "https://example.com/start": '<p>این متن شروع برای ذخیره شدن کافی است</p><a href="/next">next</a>',

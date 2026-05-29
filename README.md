@@ -26,6 +26,29 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+
+### نصب با mirror وقتی سرور به PyPI وصل نیست
+میرور پیشنهادی برای pip:
+```text
+https://pypi.tuna.tsinghua.edu.cn/simple
+```
+
+نصب یک‌باره با mirror:
+```bash
+python -m pip install -r requirements.txt \
+  -i https://pypi.tuna.tsinghua.edu.cn/simple \
+  --trusted-host pypi.tuna.tsinghua.edu.cn
+```
+
+یا mirror را دائمی کن تا بعداً فقط `pip install -r requirements.txt` بزنی:
+```bash
+python -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+python -m pip config set global.trusted-host pypi.tuna.tsinghua.edu.cn
+python -m pip install -r requirements.txt
+```
+
+نمونه تنظیمات آماده هم در `pip.conf.example` هست. اگر فقط API/crawler/chat را اجرا می‌کنی، فعلاً به NumPy نیاز نداری؛ ولی برای `train-text`, `eval-text`, `src.train`, `src.infer` باید `requirements.txt` نصب شود.
+
 ### 1) جمع‌آوری خودکار از اینترنت
 ```bash
 python -m src.cli collect-text \
@@ -165,6 +188,29 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
+
+
+### Install with a mirror when the server cannot reach PyPI
+Recommended pip mirror:
+```text
+https://pypi.tuna.tsinghua.edu.cn/simple
+```
+
+One-time install with the mirror:
+```bash
+python -m pip install -r requirements.txt \
+  -i https://pypi.tuna.tsinghua.edu.cn/simple \
+  --trusted-host pypi.tuna.tsinghua.edu.cn
+```
+
+Or configure pip once, then keep using normal install commands:
+```bash
+python -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+python -m pip config set global.trusted-host pypi.tuna.tsinghua.edu.cn
+python -m pip install -r requirements.txt
+```
+
+A ready-to-copy example is also included in `pip.conf.example`. If you only run API/crawler/chat, NumPy is not needed immediately; `requirements.txt` is required for `train-text`, `eval-text`, `src.train`, and `src.infer`.
 
 ### 1) Auto-collect from web
 ```bash
