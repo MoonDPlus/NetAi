@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from src.dataset_collect import crawl_discovery_loop, encode_url, extract_clean_text, extract_links
+from src.dataset_collect import crawl_discovery_loop, collect_from_urls, encode_url, extract_clean_text, extract_links
 from src.storage import crawl_db_stats
 
 
@@ -30,6 +30,27 @@ class TestDatasetCollect(unittest.TestCase):
         url = encode_url("https://fa.wiktionary.org/wiki/گربه")
         self.assertEqual(url, "https://fa.wiktionary.org/wiki/%DA%AF%D8%B1%D8%A8%D9%87")
         url.encode("ascii")
+
+    def test_extract_links_returns_encoded_persian_query(self):
+        html = '<a href="/search-page/result/search.php?s=کلسیم">کلسیم</a>'
+        links = extract_links(html, "https://fa.wikisa.org/start")
+        self.assertEqual(links, ["https://fa.wikisa.org/search-page/result/search.php?s=%DA%A9%D9%84%D8%B3%DB%8C%D9%85"])
+
+    def test_collect_from_urls_retries_fetch(self):
+        calls = {"count": 0}
+
+        def flaky_fetch(url, user_agent, timeout):
+            calls["count"] += 1
+            if calls["count"] == 1:
+                raise TimeoutError("slow site")
+            return "<p>متن کافی برای ذخیره شدن در خروجی تست</p>"
+
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d) / "out.csv"
+            with patch("src.dataset_collect._fetch", side_effect=flaky_fetch), patch("src.dataset_collect.time.sleep"):
+                count = collect_from_urls(["https://example.com/?q=کلسیم"], out, min_chars=10, retries=1, ignore_robots=True)
+        self.assertEqual(count, 1)
+        self.assertEqual(calls["count"], 2)
 
     def test_extract_clean_text_falls_back_when_html_parser_asserts(self):
         html = '<html><body><script>bad()</script><p>سلام دنیا</p></body></html>'

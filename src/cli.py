@@ -134,6 +134,8 @@ def _collect_text(args: argparse.Namespace) -> None:
             args.out_csv,
             min_chars=args.min_chars,
             delay_sec=args.delay_sec,
+            timeout=args.timeout,
+            retries=args.retries,
             verbose=args.verbose,
             ignore_robots=args.ignore_robots,
         )
@@ -199,6 +201,7 @@ def _crawl_learn(args: argparse.Namespace) -> None:
         min_chars=args.min_chars,
         delay_sec=args.delay_sec,
         timeout=args.timeout,
+        retries=args.retries,
         verbose=args.verbose,
         ignore_robots=args.ignore_robots,
         ask_every=args.ask_every,
@@ -253,6 +256,8 @@ def build_parser() -> argparse.ArgumentParser:
     collect_p.add_argument("--out-csv", default="data/raw_web_text.csv")
     collect_p.add_argument("--min-chars", type=int, default=200)
     collect_p.add_argument("--delay-sec", type=float, default=1.0)
+    collect_p.add_argument("--timeout", type=float, default=30.0, help="Seconds to wait for slow sites")
+    collect_p.add_argument("--retries", type=int, default=2, help="Fetch retries before skipping a URL")
     collect_p.add_argument("--max-urls", type=int, default=200)
     collect_p.add_argument("--ignore-robots", action="store_true")
     collect_p.add_argument("--verbose", action="store_true")
@@ -294,7 +299,8 @@ def build_parser() -> argparse.ArgumentParser:
     crawl_p.add_argument("--out-csv", default="data/raw_web_text.csv")
     crawl_p.add_argument("--min-chars", type=int, default=200)
     crawl_p.add_argument("--delay-sec", type=float, default=1.0)
-    crawl_p.add_argument("--timeout", type=float, default=10.0)
+    crawl_p.add_argument("--timeout", type=float, default=30.0, help="Seconds to wait for slow sites")
+    crawl_p.add_argument("--retries", type=int, default=2, help="Fetch retries before skipping a URL")
     crawl_p.add_argument("--ignore-robots", action="store_true")
     crawl_p.add_argument("--ask-every", type=int, default=100)
     crawl_p.add_argument("--workers", type=int, default=8, help="Concurrent requests for faster crawling")

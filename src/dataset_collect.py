@@ -14,6 +14,8 @@ from urllib.robotparser import RobotFileParser
 
 DEFAULT_UA = "NetAiDatasetBot/0.1 (+https://example.local)"
 FALLBACK_ALLOWED_UA = "*"
+DEFAULT_TIMEOUT = 30.0
+DEFAULT_RETRIES = 2
 
 
 def encode_url(url: str) -> str:
@@ -116,6 +118,21 @@ def _fetch(url: str, user_agent: str, timeout: float) -> str:
         return resp.read().decode(charset, errors="ignore")
 
 
+def _fetch_with_retries(url: str, user_agent: str, timeout: float, retries: int, verbose: bool = False) -> str:
+    last_exc: Exception | None = None
+    safe_url = encode_url(url)
+    for attempt in range(retries + 1):
+        try:
+            return _fetch(url, user_agent=user_agent, timeout=timeout)
+        except Exception as exc:
+            last_exc = exc
+            if verbose and attempt < retries:
+                print(f"[retry fetch] {safe_url} attempt={attempt + 1}/{retries + 1} -> {exc}")
+            if attempt < retries:
+                time.sleep(min(2.0 * (attempt + 1), 5.0))
+    raise last_exc if last_exc is not None else RuntimeError(f"fetch failed: {safe_url}")
+
+
 def _strip_tags_fallback(html: str) -> str:
     cleaned = re.sub(r"(?is)<(script|style|noscript).*?>.*?</\1>", " ", html)
     cleaned = re.sub(r"(?is)<!--.*?-->", " ", cleaned)
@@ -152,6 +169,7 @@ def extract_links(html: str, base_url: str) -> list[str]:
         normalized = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
         if parsed.query:
             normalized += f"?{parsed.query}"
+        normalized = encode_url(normalized)
         if normalized not in seen:
             seen.add(normalized)
             out.append(normalized)
@@ -173,6 +191,7 @@ def _crawl_page(
     user_agent: str,
     min_chars: int,
     timeout: float,
+    retries: int,
     verbose: bool,
     ignore_robots: bool,
 ) -> tuple[str, CrawlItem | None, list[str]]:
@@ -182,10 +201,10 @@ def _crawl_page(
         return url, None, []
 
     try:
-        html = _fetch(url, user_agent=user_agent, timeout=timeout)
+        html = _fetch_with_retries(url, user_agent=user_agent, timeout=timeout, retries=retries, verbose=verbose)
     except Exception as exc:
         if verbose:
-            print(f"[skip fetch] {url} -> {exc}")
+            print(f"[skip fetch] {encode_url(url)} -> {exc}")
         return url, None, []
 
     text = extract_clean_text(html)
@@ -206,7 +225,8 @@ def crawl_discovery_loop(
     user_agent: str = DEFAULT_UA,
     min_chars: int = 200,
     delay_sec: float = 1.0,
-    timeout: float = 10.0,
+    timeout: float = DEFAULT_TIMEOUT,
+    retries: int = DEFAULT_RETRIES,
     verbose: bool = False,
     ignore_robots: bool = False,
     ask_every: int = 100,
@@ -245,6 +265,7 @@ def crawl_discovery_loop(
                 user_agent=user_agent,
                 min_chars=min_chars,
                 timeout=timeout,
+                retries=retries,
                 verbose=verbose,
                 ignore_robots=ignore_robots,
             )
@@ -344,7 +365,8 @@ def collect_from_urls(
     user_agent: str = DEFAULT_UA,
     min_chars: int = 200,
     delay_sec: float = 1.0,
-    timeout: float = 10.0,
+    timeout: float = DEFAULT_TIMEOUT,
+    retries: int = DEFAULT_RETRIES,
     verbose: bool = False,
     ignore_robots: bool = False,
 ) -> int:
@@ -366,10 +388,10 @@ def collect_from_urls(
             continue
 
         try:
-            html = _fetch(url, user_agent=user_agent, timeout=timeout)
+            html = _fetch_with_retries(url, user_agent=user_agent, timeout=timeout, retries=retries, verbose=verbose)
         except Exception as exc:
             if verbose:
-                print(f"[skip fetch] {url} -> {exc}")
+                print(f"[skip fetch] {encode_url(url)} -> {exc}")
             continue
 
         text = extract_clean_text(html)
